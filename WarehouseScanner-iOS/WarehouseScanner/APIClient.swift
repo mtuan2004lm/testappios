@@ -73,23 +73,10 @@ struct APIClient {
         return r.data
     }
 
-    /// Gửi một nhãn (mã vạch + mã kho đọc được) lên phiên.
+    /// Gửi MỘT lần cả mã vạch lẫn mã kho đọc được từ nhãn. Server tự khớp quy tắc để ra nhóm khách hàng/kho.
     func scan(sessionId: Int, barcode: String, detectedText: String) async throws -> ScanData {
         let r: ObjectResponse<ScanData> = try await perform("POST", "/api/v1/receiving/sessions/\(sessionId)/scan",
                                                             json: ["barcode": barcode, "detected_text": detectedText], timeout: 5)
-        return r.data
-    }
-
-    /// Module 2: gửi mã kho đọc được từ nhãn để gán nhóm khách hàng.
-    func classify(sessionId: Int, barcode: String, detectedText: String) async throws -> ClassifyData {
-        let r: ObjectResponse<ClassifyData> = try await perform("POST", "/api/v1/receiving/sessions/\(sessionId)/classify",
-                                                                json: ["barcode": barcode, "detected_text": detectedText], timeout: 5)
-        return r.data
-    }
-
-    /// Đổi KINH_DOANH <-> KHONG_KINH_DOANH (khi hàng không đủ điều kiện nhập khẩu).
-    func toggleBusinessType(itemId: FlexID) async throws -> ScannedItem {
-        let r: ObjectResponse<ScannedItem> = try await perform("PATCH", "/api/v1/scanned-items/\(itemId.value)/toggle-business-type")
         return r.data
     }
 

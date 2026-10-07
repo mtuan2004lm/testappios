@@ -28,14 +28,7 @@ struct SettingsView: View {
             Section("Quy tắc mã kho đang dùng (\(store.rules.count))") {
                 ForEach(store.rules) { r in
                     VStack(alignment: .leading, spacing: 2) {
-                        HStack {
-                            Text(r.customerGroup).font(.headline)
-                            Spacer()
-                            Text(r.isBusiness ? "Kinh doanh" : "Không KD")
-                                .font(.caption.bold())
-                                .padding(.horizontal, 8).padding(.vertical, 2)
-                                .background(r.isBusiness ? Color.accent.opacity(0.25) : Color.gray.opacity(0.25), in: Capsule())
-                        }
+                        Text(r.customerGroup).font(.headline)
                         Text(r.patternRegex).font(.caption.monospaced()).foregroundStyle(.secondary)
                     }
                 }

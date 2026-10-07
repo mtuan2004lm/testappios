@@ -3,7 +3,7 @@ import AudioToolbox
 
 /// Một dòng trong lịch sử quét.
 struct ScanEntry: Identifiable {
-    enum Status { case sent, queued, noWarehouseCode, duplicate, rejected }
+    enum Status { case sent, noWarehouseCode, duplicate, rejected }
     let id = UUID()
     let barcode: String
     var warehouseText: String?
@@ -13,9 +13,18 @@ struct ScanEntry: Identifiable {
     let time = Date()
 }
 
+/// Kết quả hiển thị lớn trên màn hình: nhãn này thuộc kho / nhóm khách hàng nào.
+struct LastResult: Equatable {
+    let barcode: String
+    let group: String?          // kho / nhóm khách hàng (nil nếu bỏ qua)
+    let warehouseText: String?  // mã kho đọc được trên nhãn
+    let message: String?
+}
+
 /// QUÉT TỰ ĐỘNG: mỗi nhãn chỉ cần đưa vào khung một lần.
 /// App lấy cùng lúc mã vạch + dòng mã kho (OCR) trong cùng một "cửa sổ" ~3,5 giây rồi tự gửi về web.
 /// Nhãn nào không đọc đủ (thiếu mã kho) thì bỏ qua, không hỏi gì, không chặn quét nhãn tiếp theo.
+/// App không phân loại kinh doanh / không kinh doanh: chỉ hiện nhãn thuộc kho nào.
 @MainActor
 final class AutoScanViewModel: ObservableObject {
     @Published var sent = 0
@@ -23,9 +32,8 @@ final class AutoScanViewModel: ObservableObject {
     @Published var queued = 0                 // đang chờ gửi lại do mất mạng
     @Published var reading = false
     @Published var progress: Double = 0       // 0...1 của cửa sổ đọc
-    @Published var statusLine = "Sẵn sàng – đưa nhãn vào khung"
-    @Published var statusOK = true
     @Published var entries: [ScanEntry] = []
+    @Published var last: LastResult?
     @Published var lastItem: ScannedItem?     // kiện gửi thành công gần nhất (để gắn ảnh hỏng nếu cần)
     @Published var banner: String?
 
@@ -53,7 +61,9 @@ final class AutoScanViewModel: ObservableObject {
     init(session: ReceivingSession) { self.session = session }
 
     func stop() {
-        timerTask?.cancel(); retryTask?.cancel(); retryTask = nil
+        timerTask?.cancel()
+        retryTask?.cancel()
+        retryTask = nil
     }
 
     // MARK: Đầu vào từ camera
@@ -74,7 +84,7 @@ final class AutoScanViewModel: ObservableObject {
             }
             // Mã kho có thể đã đọc được vài khung hình trước khi thấy mã vạch
             if pending?.warehouse == nil, let r = recentMatch, now.timeIntervalSince(r.at) < 2.5 {
-                pending?.warehouse = (r.text, r.group)
+                pending?.warehouse = (text: r.text, group: r.group)
             }
             tryComplete()
             return
@@ -85,7 +95,7 @@ final class AutoScanViewModel: ObservableObject {
         guard let hit = matcher.firstMatch(inLines: lines) else { return }
         let now = Date()
         let m = (text: hit.text, group: hit.rule.customerGroup)
-        recentMatch = (m.text, m.group, now)
+        recentMatch = (text: m.text, group: m.group, at: now)
         if pending == nil {
             begin(Pending(barcode: nil, warehouse: m, start: now))
         } else if pending?.warehouse == nil {
@@ -100,14 +110,13 @@ final class AutoScanViewModel: ObservableObject {
         pending = p
         reading = true
         progress = 0
-        statusLine = "Đang đọc nhãn…"
-        statusOK = true
         timerTask?.cancel()
+        let start = p.start
         timerTask = Task { [weak self] in
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: 100_000_000)
                 guard let self else { return }
-                let elapsed = Date().timeIntervalSince(p.start)
+                let elapsed = Date().timeIntervalSince(start)
                 self.progress = min(elapsed / self.window, 1)
                 if elapsed >= self.window { self.expire(); return }
             }
@@ -128,22 +137,19 @@ final class AutoScanViewModel: ObservableObject {
         submit(code: code, text: w.text, group: w.group)
     }
 
-    /// Hết thời gian mà vẫn thiếu một trong hai -> bỏ qua.
+    /// Hết thời gian mà vẫn thiếu một trong hai -> bỏ qua, không hỏi gì.
     private func expire() {
         let p = pending
         clearPending()
-        guard let code = p?.barcode, p?.warehouse == nil else {
-            statusLine = "Sẵn sàng – đưa nhãn vào khung"
-            return          // chỉ thấy chữ mà không có mã vạch: coi như nhiễu, không đếm
-        }
+        // Chỉ thấy chữ mà không có mã vạch: coi như nhiễu, không đếm
+        guard let code = p?.barcode, p?.warehouse == nil else { return }
         cooldown[code] = Date()
         let now = Date()
         if let t = skippedAt[code], now.timeIntervalSince(t) < 60 { return }   // đã đếm rồi
         skippedAt[code] = now
         skipped += 1
         entries.insert(ScanEntry(barcode: code, status: .noWarehouseCode, note: "Không đọc được mã kho"), at: 0)
-        statusLine = "Bỏ qua \(code): không đọc được mã kho"
-        statusOK = false
+        last = LastResult(barcode: code, group: nil, warehouseText: nil, message: "Không đọc được mã kho")
     }
 
     // MARK: Gửi về web
@@ -163,24 +169,21 @@ final class AutoScanViewModel: ObservableObject {
             lastItem = data.item
             let g = data.item.customerGroup ?? group
             entries.insert(ScanEntry(barcode: code, warehouseText: text, group: g, status: .sent), at: 0)
-            statusLine = "\(g) · \(text)"          // chỉ cần biết nhãn thuộc kho nào
-            statusOK = true
+            last = LastResult(barcode: code, group: g, warehouseText: text, message: nil)
             Haptics.success()
             AudioServicesPlaySystemSound(1057)
         } catch let e as APIError {
             if e.isDuplicate {
                 skipped += 1
                 entries.insert(ScanEntry(barcode: code, warehouseText: text, status: .duplicate, note: "Đã quét trước đó"), at: 0)
-                statusLine = "Bỏ qua \(code): mã đã quét trong phiên"
-                statusOK = false
+                last = LastResult(barcode: code, group: nil, warehouseText: text, message: "Mã đã quét trong phiên")
             } else if e.isNetwork {
                 enqueue(code: code, text: text, group: group)
             } else {
                 done.remove(code)
                 skipped += 1
                 entries.insert(ScanEntry(barcode: code, warehouseText: text, status: .rejected, note: e.message), at: 0)
-                statusLine = "Bỏ qua \(code): \(e.message)"
-                statusOK = false
+                last = LastResult(barcode: code, group: nil, warehouseText: text, message: e.message)
             }
         } catch {
             enqueue(code: code, text: text, group: group)
@@ -189,10 +192,8 @@ final class AutoScanViewModel: ObservableObject {
 
     /// Mất mạng: giữ lại và tự gửi lại mỗi 4 giây, không làm mất kiện nào.
     private func enqueue(code: String, text: String, group: String) {
-        retryList.append((code, text, group))
+        retryList.append((code: code, text: text, group: group))
         queued = retryList.count
-        statusLine = "Mất kết nối, đang tự gửi lại (\(queued) kiện chờ)"
-        statusOK = false
         guard retryTask == nil else { return }
         retryTask = Task { [weak self] in
             while !Task.isCancelled {

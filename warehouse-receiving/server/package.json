@@ -7,7 +7,8 @@
   "scripts": {
     "start": "node index.js",
     "dev": "node --watch index.js",
-    "db:init": "node scripts/init-db.js"
+    "db:init": "node scripts/init-db.js",
+    "db:view": "node scripts/view-db.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

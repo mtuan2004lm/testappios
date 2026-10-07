@@ -1,8 +1,8 @@
 # Kho Scanner (iOS) – kết nối với web Warehouse Tina
 
-App Swift/SwiftUI (iOS 16+) dùng camera iPhone **thay máy quét barcode**. Phiên nhận hàng được tạo trên web; app chỉ chọn phiên đang mở rồi quét.
+App Swift/SwiftUI (iOS 16+) dùng camera iPhone **thay máy quét barcode**. Phiên nhận hàng được tạo trên web; app chỉ chọn phiên đang mở rồi quét, mọi dữ liệu gửi về web qua API:
 
-**Quét tự động 1 lần:** camera chạy liên tục, mỗi nhãn được đọc đồng thời **barcode** (AVFoundation) và **mã kho** (Vision OCR, khớp regex từ `GET /warehouse/rules`) rồi tự gửi lên web (`POST /receiving/sessions/:id/scan`) — không hỏi xác nhận. Nhãn không đọc được mã kho/barcode trong ~3,5 giây sẽ bị **bỏ qua** (đếm ở ô BỎ QUA). Mất mạng thì tự gửi lại mỗi 4 giây. App chỉ hiển thị nhãn thuộc **kho nào**, không phân loại kinh doanh. Nút **Báo hỏng** (tuỳ chọn) chụp ảnh gắn vào kiện vừa quét.
+**Một màn hình quét duy nhất, tự động:** đưa nhãn vào khung *một lần*, app lấy cùng lúc **mã vạch** và **dòng mã kho in trên nhãn** (OCR), tự khớp quy tắc của web rồi gửi `POST /receiving/sessions/:id/scan` (kèm `barcode` + `detected_text`). Không hỏi xác nhận; nhãn nào không đọc đủ cả hai trong ~3,5 giây thì bỏ qua và quét nhãn kế tiếp. Màn hình chỉ hiển thị nhãn **thuộc kho nào** (không phân loại kinh doanh). Mất mạng thì tự giữ lại và gửi lại mỗi 4 giây. Nút **Báo hỏng** (tuỳ chọn) chụp ảnh gắn vào kiện vừa gửi.
 
 ## 1. Chạy server (máy tính)
 ```bash
@@ -35,7 +35,7 @@ Cách B (thủ công): Xcode → New Project → iOS App (SwiftUI, tên `Warehou
 | File | Việc |
 |---|---|
 | `CameraEngine.swift` | Camera liên tục: barcode (AVFoundation) + OCR (Vision, ~2 khung/giây) |
-| `InboundViewModel.swift` | Module 1: gửi nền, chống đọc lặp, báo hỏng |
-| `ClassifyViewModel.swift` | Module 2: ghép mã vạch + mã kho trong cửa sổ 4 giây |
+| `AutoScanViewModel.swift` | Gom mã vạch + mã kho trong cửa sổ 3,5 giây, gửi nền, bỏ qua nhãn lỗi, tự gửi lại |
+| `AutoScanView.swift` | Màn hình quét: hiện kho của nhãn vừa quét |
 | `RuleMatcher.swift` | Khớp regex như server + sửa lỗi OCR (`_` bị mất, `0`/`O`) |
 | `APIClient.swift` | Gọi API web |

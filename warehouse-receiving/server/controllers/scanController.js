@@ -25,7 +25,7 @@ exports.scan = asyncHandler(async (req, res) => {
     // Tra cuu ma trong danh sach tracking du kien (neu co warehouse_code thi uu tien dung de khop rule)
     const reg = (await client.query('SELECT warehouse_code FROM tracking_codes WHERE barcode = $1', [barcode])).rows[0];
     const inRegistry = !!reg;
-    // App iOS gui mã kho doc duoc tu nhan (detected_text khac barcode) -> uu tien dung, vi la du lieu moi nhat
+    // App iOS gui ma kho doc duoc tu nhan (detected_text khac barcode) -> uu tien dung, vi la du lieu moi nhat
     const hasExplicitText = detectedText !== barcode;
     const matchText = hasExplicitText ? detectedText : ((reg && reg.warehouse_code) || detectedText);
 

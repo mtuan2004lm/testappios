@@ -57,16 +57,6 @@ struct ScanData: Decodable {
     let item: ScannedItem
     let scannedCount: Int
     let totalExpectedPackages: Int
-    let inRegistry: Bool
-    let requiresImportCheck: Bool
-    let warning: String?
-}
-
-struct ClassifyData: Decodable {
-    let item: ScannedItem
-    let matched: Bool
-    let requiresImportCheck: Bool?
-    let warning: String?
 }
 
 struct PhotoData: Decodable { let item: ScannedItem; let photoUrl: String }

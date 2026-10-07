@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// Màn hình quét duy nhất: camera chạy liên tục, mỗi nhãn đưa vào khung một lần là tự lấy
-/// mã vạch + mã kho rồi gửi về web. Không có hộp thoại xác nhận nào.
+/// Màn hình quét duy nhất: đưa nhãn vào khung một lần, app tự lấy mã vạch + mã kho và gửi về web.
+/// Chỉ hiển thị nhãn thuộc kho nào; không hỏi xác nhận, nhãn không đọc được thì tự bỏ qua.
 struct AutoScanView: View {
     let session: ReceivingSession
     @EnvironmentObject var store: AppStore
@@ -19,19 +19,22 @@ struct AutoScanView: View {
     var body: some View {
         ZStack {
             CameraPreview(session: camera.session).ignoresSafeArea()
-            Color.black.opacity(0.25).ignoresSafeArea().allowsHitTesting(false)
-            Reticle(active: vm.reading).allowsHitTesting(false)
+            Color.black.opacity(0.2).ignoresSafeArea().allowsHitTesting(false)
+            Reticle(active: vm.reading, progress: vm.progress).allowsHitTesting(false)
 
             VStack(spacing: 10) {
                 counters
-                if vm.reading {
-                    ProgressView(value: vm.progress).tint(Color.accent).padding(.horizontal, 24)
+                if vm.queued > 0 {
+                    Label("Mất kết nối, đang tự gửi lại (\(vm.queued) nhãn chờ)", systemImage: "arrow.triangle.2.circlepath")
+                        .font(.footnote.bold()).foregroundStyle(.white)
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background(Color.accent.opacity(0.9), in: Capsule())
                 }
                 if let b = vm.banner {
                     Text(b).font(.footnote.bold()).padding(8).background(.ultraThinMaterial, in: Capsule())
                 }
                 Spacer()
-                statusStrip
+                resultCard
                 buttons
             }
             .padding(.top, 8)
@@ -41,68 +44,98 @@ struct AutoScanView: View {
         .navigationTitle(session.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.visible, for: .navigationBar)
-        .onAppear {
-            vm.api = store.api
-            vm.matcher = store.matcher
-            if store.matcher.isEmpty {                   // chưa có quy tắc -> tải ngay từ web
-                Task { await store.refresh(); vm.matcher = store.matcher }
-            }
-            camera.ocrEnabled = true
-            camera.onBarcodes = { vm.handle(barcodes: $0) }
-            camera.onTextLines = { vm.handle(lines: $0) }
-            camera.start()
-            UIApplication.shared.isIdleTimerDisabled = true     // giữ màn hình luôn sáng
-        }
+        .onAppear { startScanning() }
         .onDisappear {
+            vm.stop()
             camera.ocrEnabled = false
             camera.stop()
-            vm.stop()
             UIApplication.shared.isIdleTimerDisabled = false
         }
-        .fullScreenCover(isPresented: $showPhoto, onDismiss: { camera.start() }) {
+        .fullScreenCover(isPresented: $showPhoto, onDismiss: { startScanning() }) {
             PhotoPicker(onImage: { img in
                 showPhoto = false
                 if let item = photoTarget { Task { await vm.uploadDamagePhoto(img, for: item) } }
             }, onCancel: { showPhoto = false })
             .ignoresSafeArea()
         }
-        .sheet(isPresented: $showHistory) { AutoHistorySheet(entries: vm.entries) }
+        .sheet(isPresented: $showHistory) { HistorySheet(entries: vm.entries) }
+    }
+
+    private func startScanning() {
+        vm.api = store.api
+        vm.matcher = store.matcher
+        camera.ocrEnabled = true                 // đọc cả mã vạch lẫn chữ mã kho trên cùng khung hình
+        camera.onBarcodes = { codes in Task { @MainActor in vm.handle(barcodes: codes) } }
+        camera.onTextLines = { lines in Task { @MainActor in vm.handle(lines: lines) } }
+        camera.start()
+        UIApplication.shared.isIdleTimerDisabled = true      // giữ màn hình luôn sáng
     }
 
     // MARK: Thành phần giao diện
 
     private var counters: some View {
-        HStack(spacing: 18) {
+        HStack(spacing: 0) {
             counter("ĐÃ GỬI", vm.sent, .okGreen)
-            counter("BỎ QUA", vm.skipped, vm.skipped > 0 ? .accent : .white)
-            if vm.queued > 0 { counter("CHỜ GỬI", vm.queued, .accent) }
-            Spacer()
+            Divider().frame(height: 36).overlay(Color.white.opacity(0.2))
+            counter("BỎ QUA", vm.skipped, .unknownGray)
         }
-        .padding(.horizontal, 16).padding(.vertical, 10)
-        .background(Color.navy.opacity(0.85), in: RoundedRectangle(cornerRadius: 14))
+        .padding(.vertical, 10)
+        .background(Color.navy.opacity(0.88), in: RoundedRectangle(cornerRadius: 14))
         .padding(.horizontal, 16)
     }
 
     private func counter(_ title: String, _ value: Int, _ color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
+        VStack(spacing: 2) {
             Text(title).font(.caption2.bold()).foregroundStyle(.white.opacity(0.7))
-            Text("\(value)").font(.system(size: 30, weight: .heavy, design: .monospaced)).foregroundStyle(color)
+            Text("\(value)").font(.system(size: 32, weight: .heavy, design: .monospaced)).foregroundStyle(color)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder private var resultCard: some View {
+        if vm.reading {
+            card(bg: Color.navy.opacity(0.92)) {
+                HStack(spacing: 10) {
+                    ProgressView().tint(.white)
+                    Text("Đang đọc nhãn…").font(.headline)
+                }
+            }
+        } else if let r = vm.last {
+            if let group = r.group {
+                // Thành công: chỉ hiển thị nhãn thuộc kho nào
+                card(bg: Color.okGreen) {
+                    VStack(spacing: 4) {
+                        Text("KHO").font(.caption.bold()).opacity(0.85)
+                        Text(group).font(.system(size: 34, weight: .heavy)).minimumScaleFactor(0.6).lineLimit(1)
+                        if let t = r.warehouseText { Text(t).font(.system(.title3, design: .monospaced).weight(.semibold)) }
+                        Text(r.barcode).font(.system(.footnote, design: .monospaced)).opacity(0.85)
+                    }
+                }
+            } else {
+                // Bỏ qua: hiện ngắn gọn, không cần bấm gì
+                card(bg: Color.unknownGray) {
+                    VStack(spacing: 2) {
+                        Text("BỎ QUA").font(.headline.weight(.heavy))
+                        Text(r.barcode).font(.system(.footnote, design: .monospaced))
+                        if let m = r.message { Text(m).font(.footnote).opacity(0.9) }
+                    }
+                }
+            }
+        } else {
+            Text("Đưa nhãn vào khung: thấy cả mã vạch và dòng mã kho")
+                .font(.subheadline.bold()).foregroundStyle(.white).multilineTextAlignment(.center)
+                .padding(.horizontal, 14).padding(.vertical, 8).background(.black.opacity(0.5), in: Capsule())
         }
     }
 
-    /// Dòng trạng thái nhỏ, tự đổi, không cần bấm gì: hiển thị nhãn vừa quét thuộc kho nào.
-    private var statusStrip: some View {
-        HStack(spacing: 8) {
-            Image(systemName: vm.statusOK ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-            Text(vm.statusLine).lineLimit(2)
-        }
-        .font(.title3.weight(.bold))
-        .foregroundStyle(.white)
-        .padding(.horizontal, 16).padding(.vertical, 12)
-        .frame(maxWidth: .infinity)
-        .background(vm.statusOK ? Color.okGreen : Color.accent, in: RoundedRectangle(cornerRadius: 16))
-        .padding(.horizontal, 16)
-        .animation(.easeInOut(duration: 0.15), value: vm.statusLine)
+    private func card<C: View>(bg: Color, @ViewBuilder _ content: () -> C) -> some View {
+        content()
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .padding(16)
+            .background(bg, in: RoundedRectangle(cornerRadius: 18))
+            .shadow(color: .black.opacity(0.35), radius: 10, y: 4)
+            .padding(.horizontal, 16)
     }
 
     private var buttons: some View {
@@ -110,7 +143,7 @@ struct AutoScanView: View {
             roundButton(camera.torchOn ? "flashlight.on.fill" : "flashlight.off.fill") { camera.toggleTorch() }
             Button {
                 photoTarget = vm.lastItem
-                camera.stop()                      // nhả camera cho màn chụp ảnh
+                camera.stop()                    // nhả camera trước khi mở màn chụp ảnh
                 showPhoto = true
             } label: {
                 Label(vm.lastItem.map { "Báo hỏng · \($0.barcode)" } ?? "Báo hỏng", systemImage: "camera.fill")
@@ -128,68 +161,7 @@ struct AutoScanView: View {
     private func roundButton(_ icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: icon).font(.title3).foregroundStyle(.white)
-                .frame(width: 48, height: 48).background(Color.navy.opacity(0.85), in: Circle())
+                .frame(width: 48, height: 48).background(Color.navy.opacity(0.88), in: Circle())
         }
-    }
-}
-
-// MARK: - Lịch sử
-
-struct AutoHistorySheet: View {
-    let entries: [ScanEntry]
-
-    var body: some View {
-        NavigationStack {
-            List(entries) { e in
-                HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: icon(e.status)).foregroundStyle(color(e.status)).padding(.top, 2)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(e.barcode).font(.system(.body, design: .monospaced).weight(.semibold))
-                        Text(e.group.map { "\($0) · \(e.warehouseText ?? "")" } ?? (e.note ?? ""))
-                            .font(.caption).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    Text(e.time, style: .time).font(.caption2).foregroundStyle(.secondary)
-                }
-            }
-            .overlay { if entries.isEmpty { Text("Chưa quét nhãn nào").foregroundStyle(.secondary) } }
-            .navigationTitle("Lịch sử quét")
-            .navigationBarTitleDisplayMode(.inline)
-        }
-        .presentationDetents([.medium, .large])
-    }
-
-    private func icon(_ s: ScanEntry.Status) -> String {
-        s == .sent ? "checkmark.circle.fill" : (s == .queued ? "clock.fill" : "forward.circle.fill")
-    }
-    private func color(_ s: ScanEntry.Status) -> Color {
-        s == .sent ? .okGreen : (s == .queued ? .accent : .unknownGray)
-    }
-}
-
-// MARK: - Thành phần dùng chung
-
-/// Khung ngắm ở giữa màn hình camera.
-struct Reticle: View {
-    var active = false
-    var body: some View {
-        RoundedRectangle(cornerRadius: 20)
-            .stroke(active ? Color.accent : Color.white.opacity(0.7), style: StrokeStyle(lineWidth: 3, dash: [18, 10]))
-            .frame(width: 320, height: 200)
-            .animation(.easeInOut(duration: 0.2), value: active)
-    }
-}
-
-struct PermissionDenied: View {
-    var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "camera.fill").font(.largeTitle)
-            Text("Chưa có quyền dùng camera").font(.headline)
-            Text("Vào Cài đặt > Kho Scanner > bật Camera.").font(.footnote).multilineTextAlignment(.center)
-            Button("Mở Cài đặt") { if let u = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(u) } }
-                .buttonStyle(.borderedProminent)
-        }
-        .padding(24).frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.navy)
-        .foregroundStyle(.white)
     }
 }

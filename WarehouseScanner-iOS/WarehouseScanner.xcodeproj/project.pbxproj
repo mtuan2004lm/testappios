@@ -10,21 +10,23 @@
 		02280F2AE248526A2A428A75 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E5444F3566E12A3458262568 /* SettingsView.swift */; };
 		16AF19631CE2B50E0CE321E7 /* WarehouseScannerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4AC475CCDD68BC4E9DBEF6C4 /* WarehouseScannerApp.swift */; };
 		1C1B6D16DDBBE44CE7F821E1 /* SessionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27BB428DE730E281D76081AD /* SessionsView.swift */; };
+		399A83F85F2A249DEE71E8E7 /* Extensions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34EB3E8F749D4F8FE13DEDDE /* Extensions.swift */; };
 		3FCF8F36411E25ECA3478855 /* RuleMatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44A356C93F187C94FCED0A34 /* RuleMatcher.swift */; };
 		41E46A0AE84304AE444A1AD4 /* PhotoPicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A0EA75A2D9B9B934572A26F /* PhotoPicker.swift */; };
 		4DE9949D1C19F3D2AD951331 /* CameraPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = A37276EF7C2A360EF557EC94 /* CameraPreview.swift */; };
 		805A6232D3EC900D44609D82 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74A5E9BA8482415525970AE5 /* Models.swift */; };
 		834D9266BA91BA345F904FFB /* CameraEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9632D7E598EE2E7E9DDFADED /* CameraEngine.swift */; };
 		92A4A1DA5FDCACEF17C87D2F /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E79EF67B3E0FF2D2D5379AFC /* APIClient.swift */; };
-		9D14DE5CD13DFC2EB8F1943C /* AutoScanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E133052A033A8786F0A9E65E /* AutoScanView.swift */; };
-		A1B075A2AB60F3C2402231BE /* AutoScanViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0943F6C6FA9541CB91A77B84 /* AutoScanViewModel.swift */; };
 		A55376DB9A850FBEC27D5DCD /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72E5D15B542CECD5967F2F27 /* Theme.swift */; };
+		CC55A4CA8DAB40050D506CAC /* AutoScanViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32FE2EF75F3CE3FD5D344683 /* AutoScanViewModel.swift */; };
 		E7ADB4A83A1977085B61B4D1 /* AppStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B5E7A4D005CCEBE7D5CB12C /* AppStore.swift */; };
+		F23DE4E930E9F8EC34EED589 /* AutoScanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9A153297CE8B5FC0B9F7BDE /* AutoScanView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		0943F6C6FA9541CB91A77B84 /* AutoScanViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoScanViewModel.swift; sourceTree = "<group>"; };
 		27BB428DE730E281D76081AD /* SessionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionsView.swift; sourceTree = "<group>"; };
+		32FE2EF75F3CE3FD5D344683 /* AutoScanViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoScanViewModel.swift; sourceTree = "<group>"; };
+		34EB3E8F749D4F8FE13DEDDE /* Extensions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Extensions.swift; sourceTree = "<group>"; };
 		3A0EA75A2D9B9B934572A26F /* PhotoPicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoPicker.swift; sourceTree = "<group>"; };
 		44A356C93F187C94FCED0A34 /* RuleMatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RuleMatcher.swift; sourceTree = "<group>"; };
 		4AC475CCDD68BC4E9DBEF6C4 /* WarehouseScannerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WarehouseScannerApp.swift; sourceTree = "<group>"; };
@@ -34,10 +36,10 @@
 		9632D7E598EE2E7E9DDFADED /* CameraEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraEngine.swift; sourceTree = "<group>"; };
 		A37276EF7C2A360EF557EC94 /* CameraPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPreview.swift; sourceTree = "<group>"; };
 		BB5944C6515D6D2B678426AB /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		E133052A033A8786F0A9E65E /* AutoScanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoScanView.swift; sourceTree = "<group>"; };
 		E5444F3566E12A3458262568 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		E79EF67B3E0FF2D2D5379AFC /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
 		F5BF48AA40CAD7891EB709FC /* WarehouseScanner.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WarehouseScanner.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		F9A153297CE8B5FC0B9F7BDE /* AutoScanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoScanView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -81,10 +83,11 @@
 			children = (
 				E79EF67B3E0FF2D2D5379AFC /* APIClient.swift */,
 				4B5E7A4D005CCEBE7D5CB12C /* AppStore.swift */,
+				F9A153297CE8B5FC0B9F7BDE /* AutoScanView.swift */,
+				32FE2EF75F3CE3FD5D344683 /* AutoScanViewModel.swift */,
 				9632D7E598EE2E7E9DDFADED /* CameraEngine.swift */,
 				A37276EF7C2A360EF557EC94 /* CameraPreview.swift */,
-				E133052A033A8786F0A9E65E /* AutoScanView.swift */,
-				0943F6C6FA9541CB91A77B84 /* AutoScanViewModel.swift */,
+				34EB3E8F749D4F8FE13DEDDE /* Extensions.swift */,
 				74A5E9BA8482415525970AE5 /* Models.swift */,
 				3A0EA75A2D9B9B934572A26F /* PhotoPicker.swift */,
 				44A356C93F187C94FCED0A34 /* RuleMatcher.swift */,
@@ -166,10 +169,11 @@
 			files = (
 				92A4A1DA5FDCACEF17C87D2F /* APIClient.swift in Sources */,
 				E7ADB4A83A1977085B61B4D1 /* AppStore.swift in Sources */,
+				F23DE4E930E9F8EC34EED589 /* AutoScanView.swift in Sources */,
+				CC55A4CA8DAB40050D506CAC /* AutoScanViewModel.swift in Sources */,
 				834D9266BA91BA345F904FFB /* CameraEngine.swift in Sources */,
 				4DE9949D1C19F3D2AD951331 /* CameraPreview.swift in Sources */,
-				9D14DE5CD13DFC2EB8F1943C /* AutoScanView.swift in Sources */,
-				A1B075A2AB60F3C2402231BE /* AutoScanViewModel.swift in Sources */,
+				399A83F85F2A249DEE71E8E7 /* Extensions.swift in Sources */,
 				805A6232D3EC900D44609D82 /* Models.swift in Sources */,
 				41E46A0AE84304AE444A1AD4 /* PhotoPicker.swift in Sources */,
 				3FCF8F36411E25ECA3478855 /* RuleMatcher.swift in Sources */,
