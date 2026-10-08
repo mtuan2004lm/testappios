@@ -5,6 +5,10 @@ const sessions = require('../controllers/sessionController');
 const scan = require('../controllers/scanController');
 const items = require('../controllers/itemController');
 const tracking = require('../controllers/trackingController');
+const products = require('../controllers/productController');
+const flights = require('../controllers/flightController');
+const bins = require('../controllers/binLocationController');
+const holds = require('../controllers/holdController');
 
 router.get('/warehouse/rules', warehouse.listRules);
 
@@ -12,6 +16,7 @@ router.get('/receiving/sessions', sessions.listSessions);
 router.post('/receiving/sessions', sessions.createSession);
 router.get('/receiving/sessions/:id', sessions.getSession);
 router.post('/receiving/sessions/:id/scan', scan.scan);
+router.post('/receiving/sessions/:id/scan-fail', scan.scanFail);
 router.patch('/receiving/sessions/:id', sessions.updateExpected);
 router.post('/receiving/sessions/:id/classify', scan.classify);
 router.patch('/receiving/sessions/:id/finalize', sessions.finalizeCount);
@@ -26,5 +31,30 @@ router.get('/tracking-codes', tracking.list);
 router.post('/tracking-codes/bulk', tracking.bulk);
 router.post('/tracking-codes/generate', tracking.generate);
 router.delete('/tracking-codes/:id', tracking.remove);
+
+router.get('/products', products.list);
+router.post('/products', products.create);
+router.put('/products/:id', products.update);
+router.delete('/products/:id', products.remove);
+router.post('/products/:id/image', express.raw({ type: 'image/*', limit: '10mb' }), products.setImage);
+router.delete('/products/:id/image', products.removeImage);
+
+router.get('/flights', flights.list);
+router.post('/flights', flights.create);
+router.put('/flights/:id', flights.update);
+router.patch('/flights/:id/status', flights.setStatus);
+router.delete('/flights/:id', flights.remove);
+
+router.get('/bin-locations', bins.list);
+router.post('/bin-locations', bins.create);
+router.post('/bin-locations/bulk', bins.bulk);
+router.put('/bin-locations/:id', bins.update);
+router.delete('/bin-locations/:id', bins.remove);
+
+router.get('/holds', holds.list);
+router.post('/holds', holds.create);
+router.patch('/holds/bulk', holds.bulk);
+router.patch('/holds/:id', holds.patch);
+router.delete('/holds/:id', holds.remove);
 
 module.exports = router;

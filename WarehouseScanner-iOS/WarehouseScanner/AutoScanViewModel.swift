@@ -3,7 +3,7 @@ import AudioToolbox
 
 /// Một dòng trong lịch sử quét.
 struct ScanEntry: Identifiable {
-    enum Status { case sent, noWarehouseCode, duplicate, rejected }
+    enum Status { case sent, noWarehouseCode, noBarcode, duplicate, rejected }
     let id = UUID()
     let barcode: String
     var warehouseText: String?
@@ -19,6 +19,10 @@ struct LastResult: Equatable {
     let group: String?          // kho / nhóm khách hàng (nil nếu bỏ qua)
     let warehouseText: String?  // mã kho đọc được trên nhãn
     let message: String?
+    var businessType: String? = nil   // KINH_DOANH | KHONG_KINH_DOANH (từ server)
+    var duplicate: Bool = false // true: nhãn đã quét trước đó trong phiên -> MÃ TRÙNG
+    var failed: Bool = false    // true: đọc được mã kho nhưng không đọc được mã vạch -> FAIL
+    var unknown: Bool = false   // true: mã không có trong Danh sách mặt hàng -> "Không xác định"
 }
 
 /// QUÉT TỰ ĐỘNG: mỗi nhãn chỉ cần đưa vào khung một lần.
@@ -28,6 +32,7 @@ struct LastResult: Equatable {
 @MainActor
 final class AutoScanViewModel: ObservableObject {
     @Published var sent = 0
+    @Published var failed = 0
     @Published var skipped = 0
     @Published var queued = 0                 // đang chờ gửi lại do mất mạng
     @Published var reading = false
@@ -41,8 +46,8 @@ final class AutoScanViewModel: ObservableObject {
     var api: APIClient?
     var matcher = RuleMatcher(rules: [])
 
-    /// Thời gian tối đa gom đủ barcode + mã kho cho một nhãn (yêu cầu 3-5 giây).
-    let window: TimeInterval = 3.5
+    /// Thời gian tối đa gom đủ barcode + mã kho cho một nhãn (mục tiêu ~2 giây).
+    let window: TimeInterval = 2.0
 
     private struct Pending {
         var barcode: String?
@@ -54,6 +59,10 @@ final class AutoScanViewModel: ObservableObject {
     private var done = Set<String>()                      // mã đã gửi (hoặc đang gửi) -> không gửi lại
     private var skippedAt: [String: Date] = [:]           // mã đã bị bỏ qua, để không đếm lặp
     private var cooldown: [String: Date] = [:]
+    private var lastSeen: [String: Date] = [:]           // lần cuối thấy mỗi mã vạch (để phân biệt "vẫn nằm trong khung" với "quét lại")
+    private var lastDupAt: [String: Date] = [:]          // lần cuối báo MÃ TRÙNG cho mã này
+    private var suppressTextUntil = Date.distantPast     // nhãn đã gửi vẫn đang trong khung -> không coi chữ mã kho là nhãn mới
+    private var failCooldown: [String: Date] = [:]        // mã kho đã báo FAIL -> không báo lặp khi nhãn vẫn nằm trong khung
     private var retryList: [(code: String, text: String, group: String)] = []
     private var timerTask: Task<Void, Never>?
     private var retryTask: Task<Void, Never>?
@@ -72,8 +81,22 @@ final class AutoScanViewModel: ObservableObject {
         let now = Date()
         for raw in barcodes {
             let code = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !code.isEmpty, !done.contains(code) else { continue }
-            if let t = cooldown[code], now.timeIntervalSince(t) < 2 { continue }
+            guard !code.isEmpty else { continue }
+            let prevSeen = lastSeen[code]
+            lastSeen[code] = now
+            if done.contains(code) {
+                // Nhãn đã gửi rồi. Nếu nó vẫn nằm trong khung thì im lặng; nếu đã rời khung rồi quét lại -> MÃ TRÙNG (không phải FAIL)
+                suppressTextUntil = now.addingTimeInterval(2)
+                if pending != nil, pending?.barcode == nil { clearPending() }      // chữ mã kho của nhãn này, không phải nhãn mới
+                if let p = prevSeen, now.timeIntervalSince(p) > 1.5,
+                   lastDupAt[code].map({ now.timeIntervalSince($0) > 4 }) ?? true {
+                    lastDupAt[code] = now
+                    Task { await send(code: code, text: code, group: "") }          // server trả 409 -> hiện MÃ TRÙNG, web tăng bộ đếm
+                }
+                continue
+            }
+            if let f = failCooldown[code], now.timeIntervalSince(f) < 8 { continue }   // vừa báo FAIL, đừng báo lặp
+            if let t = cooldown[code], now.timeIntervalSince(t) < 1.5 { continue }
 
             if pending == nil {
                 begin(Pending(barcode: code, warehouse: nil, start: now))
@@ -83,7 +106,7 @@ final class AutoScanViewModel: ObservableObject {
                 continue                                    // đang xử lý một nhãn khác
             }
             // Mã kho có thể đã đọc được vài khung hình trước khi thấy mã vạch
-            if pending?.warehouse == nil, let r = recentMatch, now.timeIntervalSince(r.at) < 2.5 {
+            if pending?.warehouse == nil, let r = recentMatch, now.timeIntervalSince(r.at) < 1.5 {
                 pending?.warehouse = (text: r.text, group: r.group)
             }
             tryComplete()
@@ -94,6 +117,8 @@ final class AutoScanViewModel: ObservableObject {
     func handle(lines: [String]) {
         guard let hit = matcher.firstMatch(inLines: lines) else { return }
         let now = Date()
+        if now < suppressTextUntil { return }                                      // nhãn đã gửi vẫn trong khung
+        if let t = failCooldown[hit.text], now.timeIntervalSince(t) < 8 { return }   // nhãn vừa báo FAIL, đừng báo lặp
         let m = (text: hit.text, group: hit.rule.customerGroup)
         recentMatch = (text: m.text, group: m.group, at: now)
         if pending == nil {
@@ -141,7 +166,11 @@ final class AutoScanViewModel: ObservableObject {
     private func expire() {
         let p = pending
         clearPending()
-        // Chỉ thấy chữ mà không có mã vạch: coi như nhiễu, không đếm
+        // Đọc được mã kho nhưng không có mã vạch -> FAIL (báo lên web, không tạo kiện)
+        if p?.barcode == nil, let w = p?.warehouse {
+            reportFail(text: w.text, group: w.group)
+            return
+        }
         guard let code = p?.barcode, p?.warehouse == nil else { return }
         cooldown[code] = Date()
         let now = Date()
@@ -150,6 +179,16 @@ final class AutoScanViewModel: ObservableObject {
         skipped += 1
         entries.insert(ScanEntry(barcode: code, status: .noWarehouseCode, note: "Không đọc được mã kho"), at: 0)
         last = LastResult(barcode: code, group: nil, warehouseText: nil, message: "Không đọc được mã kho")
+    }
+
+    private func reportFail(text: String, group: String) {
+        failCooldown[text] = Date()
+        failed += 1
+        entries.insert(ScanEntry(barcode: "—", warehouseText: text, group: group, status: .noBarcode, note: "Không đọc được mã vạch"), at: 0)
+        last = LastResult(barcode: "", group: group, warehouseText: text, message: "Không đọc được mã vạch", failed: true)
+        Haptics.warning()
+        AudioServicesPlaySystemSound(1053)
+        Task { try? await api?.scanFail(sessionId: session.id, detectedText: text) }   // báo FAIL lên web (nếu mất mạng thì bỏ qua)
     }
 
     // MARK: Gửi về web
@@ -169,14 +208,25 @@ final class AutoScanViewModel: ObservableObject {
             lastItem = data.item
             let g = data.item.customerGroup ?? group
             entries.insert(ScanEntry(barcode: code, warehouseText: text, group: g, status: .sent), at: 0)
-            last = LastResult(barcode: code, group: g, warehouseText: text, message: nil)
+            last = LastResult(barcode: code, group: g, warehouseText: data.item.detectedWarehouseCode ?? text, message: nil, businessType: data.item.businessType, unknown: data.item.exceptionStatus == "UNKNOWN")
             Haptics.success()
             AudioServicesPlaySystemSound(1057)
         } catch let e as APIError {
             if e.isDuplicate {
                 skipped += 1
-                entries.insert(ScanEntry(barcode: code, warehouseText: text, status: .duplicate, note: "Đã quét trước đó"), at: 0)
-                last = LastResult(barcode: code, group: nil, warehouseText: text, message: "Mã đã quét trong phiên")
+                entries.insert(ScanEntry(barcode: code, warehouseText: text == code ? nil : text, status: .duplicate, note: "Đã quét trước đó"), at: 0)
+                last = LastResult(barcode: code, group: nil, warehouseText: nil, message: "Mã đã quét trong phiên", duplicate: true)
+                Haptics.warning()
+                AudioServicesPlaySystemSound(1053)
+            } else if e.code == "TRACKING_NOT_FOUND" {
+                // Mã không có trong Danh sách mặt hàng: web ghi FAIL, không tính là đã quét
+                done.remove(code)
+                failCooldown[code] = Date()
+                failed += 1
+                entries.insert(ScanEntry(barcode: code, warehouseText: text, group: group, status: .rejected, note: "Không có trong danh sách mặt hàng"), at: 0)
+                last = LastResult(barcode: code, group: group, warehouseText: text, message: "Mã không có trong danh sách mặt hàng", failed: true)
+                Haptics.warning()
+                AudioServicesPlaySystemSound(1053)
             } else if e.isNetwork {
                 enqueue(code: code, text: text, group: group)
             } else {

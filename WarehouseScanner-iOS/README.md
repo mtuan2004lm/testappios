@@ -2,7 +2,7 @@
 
 App Swift/SwiftUI (iOS 16+) dùng camera iPhone **thay máy quét barcode**. Phiên nhận hàng được tạo trên web; app chỉ chọn phiên đang mở rồi quét, mọi dữ liệu gửi về web qua API:
 
-**Một màn hình quét duy nhất, tự động:** đưa nhãn vào khung *một lần*, app lấy cùng lúc **mã vạch** và **dòng mã kho in trên nhãn** (OCR), tự khớp quy tắc của web rồi gửi `POST /receiving/sessions/:id/scan` (kèm `barcode` + `detected_text`). Không hỏi xác nhận; nhãn nào không đọc đủ cả hai trong ~3,5 giây thì bỏ qua và quét nhãn kế tiếp. Màn hình chỉ hiển thị nhãn **thuộc kho nào** (không phân loại kinh doanh). Mất mạng thì tự giữ lại và gửi lại mỗi 4 giây. Nút **Báo hỏng** (tuỳ chọn) chụp ảnh gắn vào kiện vừa gửi.
+**Một màn hình quét duy nhất, tự động:** đưa nhãn vào khung *một lần*, app lấy cùng lúc **mã vạch** và **dòng mã kho in trên nhãn** (OCR), tự khớp quy tắc của web rồi gửi `POST /receiving/sessions/:id/scan` (kèm `barcode` + `detected_text`). Không hỏi xác nhận; nhãn nào không đọc đủ cả hai trong ~2 giây thì bỏ qua và quét nhãn kế tiếp. Màn hình chỉ hiển thị nhãn **thuộc kho nào** (không phân loại kinh doanh). Mất mạng thì tự giữ lại và gửi lại mỗi 4 giây. Nút **Báo hỏng** (tuỳ chọn) chụp ảnh gắn vào kiện vừa gửi.
 
 ## 1. Chạy server (máy tính)
 ```bash
@@ -35,7 +35,15 @@ Cách B (thủ công): Xcode → New Project → iOS App (SwiftUI, tên `Warehou
 | File | Việc |
 |---|---|
 | `CameraEngine.swift` | Camera liên tục: barcode (AVFoundation) + OCR (Vision, ~2 khung/giây) |
-| `AutoScanViewModel.swift` | Gom mã vạch + mã kho trong cửa sổ 3,5 giây, gửi nền, bỏ qua nhãn lỗi, tự gửi lại |
+| `AutoScanViewModel.swift` | Gom mã vạch + mã kho trong cửa sổ 2 giây, gửi nền, bỏ qua nhãn lỗi, tự gửi lại |
 | `AutoScanView.swift` | Màn hình quét: hiện kho của nhãn vừa quét |
 | `RuleMatcher.swift` | Khớp regex như server + sửa lỗi OCR (`_` bị mất, `0`/`O`) |
 | `APIClient.swift` | Gọi API web |
+
+## Kết quả hiển thị trên màn quét
+- **Thẻ xanh "KHO …"**: mã có trong *Danh sách mặt hàng* của web, kèm nhóm kho đọc từ nhãn.
+- **Thẻ cam "KHÔNG XÁC ĐỊNH"**: mã không có trong Danh sách mặt hàng. Mã vẫn được gửi về web và ghi là *Không xác định*.
+- **Thẻ xám "BỎ QUA"**: không đọc đủ mã vạch + mã kho, hoặc mã đã quét trong phiên.
+
+## Lưu ý khi cập nhật
+Sau khi sửa code Swift: Xcode → **Run** lại để cài bản mới lên iPhone. Sau khi sửa server: `Ctrl+C` rồi `npm run dev` lại. Xem thêm lịch sử cập nhật trong `../warehouse-receiving/README.md`.

@@ -4,7 +4,7 @@ import UIKit
 
 /// Camera chạy liên tục. Cùng một luồng hình cho cả hai việc:
 ///  - Đọc barcode bằng AVCaptureMetadataOutput (nhanh, chạy trên chip chuyên dụng)
-///  - Đọc chữ (mã kho in trên nhãn) bằng Vision, chỉ khi bật `ocrEnabled`, giới hạn ~2 khung/giây để máy không nóng.
+///  - Đọc chữ (mã kho in trên nhãn) bằng Vision, chỉ khi bật `ocrEnabled`, đọc nhanh (.fast) ~8 khung/giây, cứ 4 lần thì có 1 lần đọc kỹ (.accurate) để không bỏ sót chữ nhỏ.
 final class CameraEngine: NSObject, ObservableObject,
                           AVCaptureMetadataOutputObjectsDelegate, AVCaptureVideoDataOutputSampleBufferDelegate {
 
@@ -27,6 +27,7 @@ final class CameraEngine: NSObject, ObservableObject,
     private var _ocrEnabled = false
     private var _ocrBusy = false
     private var _lastOCR = Date.distantPast
+    private var _ocrCount = 0
     var ocrEnabled: Bool {
         get { lock.lock(); defer { lock.unlock() }; return _ocrEnabled }
         set { lock.lock(); _ocrEnabled = newValue; lock.unlock() }
@@ -85,6 +86,9 @@ final class CameraEngine: NSObject, ObservableObject,
             if cam.isFocusModeSupported(.continuousAutoFocus) { cam.focusMode = .continuousAutoFocus }
             if cam.isExposureModeSupported(.continuousAutoExposure) { cam.exposureMode = .continuousAutoExposure }
             if cam.isSmoothAutoFocusSupported { cam.isSmoothAutoFocusEnabled = false }   // lấy nét nhanh hơn
+            // Nhãn luôn ở gần (15-40 cm): giới hạn tầm lấy nét gần để không "săn nét" ra xa -> nét nhanh hơn rõ rệt
+            if cam.isAutoFocusRangeRestrictionSupported { cam.autoFocusRangeRestriction = .near }
+            if cam.isLowLightBoostSupported { cam.automaticallyEnablesLowLightBoostWhenAvailable = true }
             cam.unlockForConfiguration()
         }
 
@@ -125,8 +129,9 @@ final class CameraEngine: NSObject, ObservableObject,
 
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         lock.lock()
-        let allowed = _ocrEnabled && !_ocrBusy && Date().timeIntervalSince(_lastOCR) > 0.45
-        if allowed { _ocrBusy = true; _lastOCR = Date() }
+        let allowed = _ocrEnabled && !_ocrBusy && Date().timeIntervalSince(_lastOCR) > 0.1
+        var accurate = false
+        if allowed { _ocrBusy = true; _lastOCR = Date(); _ocrCount += 1; accurate = _ocrCount % 4 == 0 }
         lock.unlock()
         guard allowed, let buffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
@@ -137,7 +142,8 @@ final class CameraEngine: NSObject, ObservableObject,
                 .map { $0.string } ?? []
             if !lines.isEmpty { DispatchQueue.main.async { self?.onTextLines?(lines) } }
         }
-        request.recognitionLevel = .accurate       // mã kho là chữ in nhỏ -> ưu tiên chính xác
+        // Phần lớn khung hình đọc nhanh (.fast, ~vài chục ms) để ra kết quả sớm; 1/4 khung đọc kỹ cho chữ nhỏ/mờ
+        request.recognitionLevel = accurate ? .accurate : .fast
         request.usesLanguageCorrection = false     // mã không phải từ điển, tránh bị "sửa" sai
 
         // Camera sau ở chế độ dọc: ảnh gốc xoay 90° -> .right

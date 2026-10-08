@@ -25,6 +25,8 @@ struct SettingsView: View {
             } header: { Text("Địa chỉ server (web Warehouse Tina)") }
               footer: { Text("Điện thoại và máy chạy server phải cùng Wi-Fi. Dùng địa chỉ IP của máy tính (terminal server in ra dòng \"Dien thoai dung dia chi\"), không dùng localhost.") }
 
+            Section { LabeledContent("Bản app", value: AppStore.buildTag) }
+
             Section("Quy tắc mã kho đang dùng (\(store.rules.count))") {
                 ForEach(store.rules) { r in
                     VStack(alignment: .leading, spacing: 2) {

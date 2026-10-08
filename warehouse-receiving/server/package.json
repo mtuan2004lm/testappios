@@ -6,9 +6,11 @@
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
+    "predev": "(lsof -ti :${PORT:-3000} | xargs kill -9) 2>/dev/null || true",
     "dev": "node --watch index.js",
     "db:init": "node scripts/init-db.js",
-    "db:view": "node scripts/view-db.js"
+    "db:view": "node scripts/view-db.js",
+    "db:recompute": "node scripts/recompute-items.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

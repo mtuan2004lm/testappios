@@ -68,6 +68,7 @@ exports.getSession = asyncHandler(async (req, res) => {
 
   const exceptionCounts = Object.fromEntries(EXCEPTION_KEYS.map((k) => [k, 0]));
   for (const it of items.rows) if (exceptionCounts[it.exception_status] !== undefined) exceptionCounts[it.exception_status] += 1;
+  exceptionCounts.FAIL = session.fail_count;           // nhan khong doc duoc barcode (chi co ma kho)
   exceptionCounts.DUPLICATE = session.duplicate_count; // ma trung khong luu thanh dong, dem rieng tren phien
 
   res.json({ data: { session, items: items.rows, exception_counts: exceptionCounts } });

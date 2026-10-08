@@ -78,6 +78,8 @@ struct AutoScanView: View {
             counter("ĐÃ GỬI", vm.sent, .okGreen)
             Divider().frame(height: 36).overlay(Color.white.opacity(0.2))
             counter("BỎ QUA", vm.skipped, .unknownGray)
+            Divider().frame(height: 36).overlay(Color.white.opacity(0.2))
+            counter("FAIL", vm.failed, .dupRed)
         }
         .padding(.vertical, 10)
         .background(Color.navy.opacity(0.88), in: RoundedRectangle(cornerRadius: 14))
@@ -101,14 +103,37 @@ struct AutoScanView: View {
                 }
             }
         } else if let r = vm.last {
-            if let group = r.group {
-                // Thành công: chỉ hiển thị nhãn thuộc kho nào
-                card(bg: Color.okGreen) {
+            if r.duplicate {
+                // Quét lại nhãn đã quét trong phiên: MÃ TRÙNG (không phải FAIL)
+                card(bg: Color.accent) {
                     VStack(spacing: 4) {
-                        Text("KHO").font(.caption.bold()).opacity(0.85)
-                        Text(group).font(.system(size: 34, weight: .heavy)).minimumScaleFactor(0.6).lineLimit(1)
+                        Text("MÃ TRÙNG").font(.system(size: 34, weight: .heavy))
+                        Text("Nhãn này đã quét trong phiên").font(.subheadline.bold())
+                        Text(r.barcode).font(.system(.footnote, design: .monospaced)).opacity(0.9)
+                    }
+                }
+            } else if r.failed {
+                // Không đọc được mã vạch (nhưng đọc được mã kho): FAIL, web cũng hiện FAIL
+                card(bg: Color.dupRed) {
+                    VStack(spacing: 4) {
+                        Text("FAIL").font(.system(size: 34, weight: .heavy))
+                        Text(r.message ?? "Không đọc được mã vạch").font(.subheadline.bold()).multilineTextAlignment(.center)
+                        if !r.barcode.isEmpty { Text(r.barcode).font(.system(.footnote, design: .monospaced)).opacity(0.9) }
+                        if let g = r.group { Text("KHO \(g)").font(.footnote).opacity(0.9) }
                         if let t = r.warehouseText { Text(t).font(.system(.title3, design: .monospaced).weight(.semibold)) }
-                        Text(r.barcode).font(.system(.footnote, design: .monospaced)).opacity(0.85)
+                    }
+                }
+            } else if let group = r.group {
+                // Thành công: hiện riêng Nhóm KH, Mã kho, Loại hình (web cũng lưu và hiển thị riêng từng cột)
+                card(bg: Color.okGreen) {
+                    VStack(spacing: 6) {
+                        Text("SUCCESS").font(.headline.weight(.heavy))
+                        Text(r.barcode).font(.system(.footnote, design: .monospaced)).opacity(0.9)
+                        VStack(spacing: 4) {
+                            infoRow("NHÓM KH", group)
+                            infoRow("MÃ KHO", r.warehouseText ?? "—", mono: true)
+                            infoRow("LOẠI HÌNH", businessLabel(r.businessType))
+                        }
                     }
                 }
             } else {
@@ -125,6 +150,22 @@ struct AutoScanView: View {
             Text("Đưa nhãn vào khung: thấy cả mã vạch và dòng mã kho")
                 .font(.subheadline.bold()).foregroundStyle(.white).multilineTextAlignment(.center)
                 .padding(.horizontal, 14).padding(.vertical, 8).background(.black.opacity(0.5), in: Capsule())
+        }
+    }
+
+    private func infoRow(_ title: String, _ value: String, mono: Bool = false) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title).font(.caption.bold()).opacity(0.85).frame(width: 84, alignment: .leading)
+            Text(value).font(mono ? .system(.title3, design: .monospaced).weight(.bold) : .title3.weight(.bold))
+                .minimumScaleFactor(0.6).lineLimit(1).frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private func businessLabel(_ t: String?) -> String {
+        switch t {
+        case "KINH_DOANH": return "Kinh doanh"
+        case "KHONG_KINH_DOANH": return "Không kinh doanh"
+        default: return "—"
         }
     }
 

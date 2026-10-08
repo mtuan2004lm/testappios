@@ -59,6 +59,8 @@ struct ScanData: Decodable {
     let totalExpectedPackages: Int
 }
 
+struct ScanFailData: Decodable { let status: String }
+
 struct PhotoData: Decodable { let item: ScannedItem; let photoUrl: String }
 
 // MARK: - Lỗi

@@ -76,8 +76,14 @@ struct APIClient {
     /// Gửi MỘT lần cả mã vạch lẫn mã kho đọc được từ nhãn. Server tự khớp quy tắc để ra nhóm khách hàng/kho.
     func scan(sessionId: Int, barcode: String, detectedText: String) async throws -> ScanData {
         let r: ObjectResponse<ScanData> = try await perform("POST", "/api/v1/receiving/sessions/\(sessionId)/scan",
-                                                            json: ["barcode": barcode, "detected_text": detectedText], timeout: 5)
+                                                            json: ["barcode": barcode, "detected_text": detectedText], timeout: 3)
         return r.data
+    }
+
+    /// Không đọc được mã vạch nhưng đọc được mã kho: báo FAIL để web hiển thị (không tạo kiện).
+    func scanFail(sessionId: Int, detectedText: String) async throws {
+        let _: ObjectResponse<ScanFailData> = try await perform("POST", "/api/v1/receiving/sessions/\(sessionId)/scan-fail",
+                                                                json: ["detected_text": detectedText], timeout: 5)
     }
 
     /// Gắn ảnh hàng hỏng vào kiện (server tự đánh dấu DAMAGED).
