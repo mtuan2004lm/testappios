@@ -9,6 +9,7 @@ const products = require('../controllers/productController');
 const flights = require('../controllers/flightController');
 const bins = require('../controllers/binLocationController');
 const holds = require('../controllers/holdController');
+const formats = require('../controllers/formatController');
 
 router.get('/warehouse/rules', warehouse.listRules);
 
@@ -56,5 +57,11 @@ router.post('/holds', holds.create);
 router.patch('/holds/bulk', holds.bulk);
 router.patch('/holds/:id', holds.patch);
 router.delete('/holds/:id', holds.remove);
+
+router.get('/tracking-formats', formats.list);
+router.post('/tracking-formats', formats.create);
+router.post('/tracking-formats/test', formats.test);
+router.put('/tracking-formats/:id', formats.update);
+router.delete('/tracking-formats/:id', formats.remove);
 
 module.exports = router;

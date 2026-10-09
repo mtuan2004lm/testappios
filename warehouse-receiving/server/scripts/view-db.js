@@ -3,7 +3,7 @@
 //   npm run db:view -- scanned_items -> 50 dòng mới nhất của một bảng
 const { pool } = require('../config/db');
 
-const TABLES = ['receiving_sessions', 'scanned_items', 'tracking_codes', 'warehouse_rules', 'item_photos', 'products', 'flights', 'bin_locations', 'holds'];
+const TABLES = ['receiving_sessions', 'scanned_items', 'tracking_codes', 'warehouse_rules', 'item_photos', 'products', 'flights', 'bin_locations', 'holds', 'tracking_formats'];
 
 async function show(table, limit) {
   const total = (await pool.query(`SELECT COUNT(*) FROM ${table}`)).rows[0].count;

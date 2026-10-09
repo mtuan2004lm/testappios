@@ -1,12 +1,16 @@
 const db = require('../config/db');
 const { HttpError, asyncHandler, parseId } = require('../utils/http');
 const { matchRule } = require('../utils/ruleMatcher');
+const { matchProduct } = require('../utils/trackingFormats');
 
 // POST /api/v1/receiving/sessions/:id/scan   body: { barcode, detected_text, scanned_by? }
 exports.scan = asyncHandler(async (req, res) => {
   const sessionId = parseId(req.params.id);
   // Bo ky tu dieu khien an trong ma vach (vd GS \x1D cua GS1-128: "42097220<GS>9334...") roi moi so khop / luu
-  const barcode = String((req.body && req.body.barcode) || '').replace(/[\x00-\x1F\x7F]/g, '').trim();
+  let barcode = String((req.body && req.body.barcode) || '').replace(/[\x00-\x1F\x7F]/g, '').trim();
+  // Tren mot tem co the co toi da 3 ma tracking: app gui them cac ma khac cung doc duoc tren tem; chi can 1 ma co trong danh sach la nhan
+  const altBarcodes = (Array.isArray(req.body && req.body.alt_barcodes) ? req.body.alt_barcodes : [])
+    .map((x) => String(x || '').replace(/[\x00-\x1F\x7F]/g, '').trim()).filter((x) => x && x.length <= 100 && x !== barcode).slice(0, 5);
   // detected_text la chuoi ma kho doc tu nhan; neu app khong gui thi dung chinh barcode de khop
   const detectedText = String((req.body && req.body.detected_text) || '').trim() || barcode;
   const scannedBy = (req.body && req.body.scanned_by) || null;
@@ -26,23 +30,16 @@ exports.scan = asyncHandler(async (req, res) => {
     // Tra cuu ma trong danh sach tracking du kien (neu co warehouse_code thi uu tien dung de khop rule)
     // Chi ma co trong "Danh sach mat hang" (cot Tracking hoac Ma khac) moi duoc coi la xac dinh; con lai la UNKNOWN
     const reg = (await client.query('SELECT warehouse_code FROM tracking_codes WHERE barcode = $1', [barcode])).rows[0];
-    // Tem USPS: ma vach = "420" + ZIP (5 hoac 9 so) + tracking that (vd 420 97220 9334610990150197272857)
-    // -> ngoai chinh ma quet, thu them phan tracking sau tien to 420+ZIP.
-    const candidates = [barcode];
-    if (/^420\d{13,}$/.test(barcode)) { candidates.push(barcode.slice(8)); if (barcode.length > 12) candidates.push(barcode.slice(12)); }
-    const normBarcode = barcode.replace(/\s/g, '').toUpperCase();
-    const inRegistry = (await client.query(
-      // So sanh khong phan biet hoa/thuong va bo qua khoang trang thua trong danh sach.
-      // Nhan FedEx / UPS...: ma vach dai (vd 34 so) co chua ma tracking in tren nhan (vd 12 so cuoi)
-      // -> neu ma trong danh sach dai >= 10 ky tu va nam trong ma vach thi cung tinh la khop.
-      `SELECT 1 FROM products p,
-              LATERAL (SELECT UPPER(regexp_replace(p.tracking_code, '\\s', '', 'g')) AS t,
-                              UPPER(regexp_replace(COALESCE(p.alt_code, ''), '\\s', '', 'g')) AS a) n
-        WHERE n.t = ANY($1) OR n.a = ANY($1)
-           OR (LENGTH(n.t) >= 10 AND strpos($2, n.t) > 0)
-           OR (LENGTH(n.a) >= 10 AND strpos($2, n.a) > 0)
-        LIMIT 1`,
-      [candidates.map((c) => c.replace(/\s/g, '').toUpperCase()), normBarcode])).rows.length > 0;
+    // Doi chieu voi Danh sach mat hang theo dinh dang tung hang van chuyen (bang tracking_formats), xem utils/trackingFormats.js
+    // Thu lan luot ma chinh roi cac ma khac tren tem; ma dau tien co trong danh sach thang (khong phu thuoc hang cua phien)
+    let m = null;
+    for (const c of [barcode, ...altBarcodes]) {
+      const r = await matchProduct(client, c, s.rows[0].carrier_name);
+      if (!m) m = r;
+      if (r.product) { m = r; barcode = c; break; }
+    }
+    const inRegistry = !!m.product;
+    const candidates = m.candidates.map((c) => c.value);
     // App iOS gui ma kho doc duoc tu nhan (detected_text khac barcode) -> uu tien dung, vi la du lieu moi nhat
     const hasExplicitText = detectedText !== barcode;
     const matchText = hasExplicitText ? detectedText : ((reg && reg.warehouse_code) || detectedText);
@@ -53,7 +50,7 @@ exports.scan = asyncHandler(async (req, res) => {
 
     // Ma KHONG co trong Danh sach mat hang -> tu choi (FAIL): khong tao kien, khong tinh vao so da quet
     if (!inRegistry) {
-      console.log(`[scan] FAIL phien ${sessionId}: ma quet "${barcode}" (${barcode.length} ky tu), da thu so voi danh sach:`, candidates);
+      console.log(`[scan] FAIL phien ${sessionId}: ma quet "${barcode}" (${barcode.length} ky tu${altBarcodes.length ? ', ma khac tren tem: ' + altBarcodes.join(', ') : ''}), da thu so voi danh sach:`, candidates);
       await client.query(
         `UPDATE receiving_sessions
             SET fail_count = fail_count + 1, last_scan_status = 'FAIL', last_scan_at = CURRENT_TIMESTAMP,
@@ -62,21 +59,25 @@ exports.scan = asyncHandler(async (req, res) => {
       await client.query('COMMIT');
       return res.status(422).json({
         error: { code: 'TRACKING_NOT_FOUND', message: `FAIL: mã ${barcode} không có trong danh sách mặt hàng` },
-        data: { barcode, status: 'FAIL', customer_group: rule ? rule.customer_group : null },
+        data: { barcode, status: 'FAIL', customer_group: rule ? rule.customer_group : null, carrier: m.carrier, tried: candidates },
       });
     }
 
+    // Cung mot kien co the co nhieu ma (ma ngan / dai, toi da 3 ma tren tem) -> chan trung theo mat hang da khop
+    const sameParcel = (await client.query(
+      'SELECT 1 FROM scanned_items WHERE session_id = $1 AND (product_id = $3 OR matched_tracking = $2) LIMIT 1', [sessionId, m.matched, m.product.id])).rows.length > 0;
+
     // ON CONFLICT bat loi trung (session_id, barcode) ma khong lam hong transaction
-    const ins = await client.query(
+    const ins = sameParcel ? { rows: [] } : await client.query(
       `INSERT INTO scanned_items
-         (session_id, barcode, detected_warehouse_code, matched_rule_id, customer_group, business_type, exception_status, scanned_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, 'Nhan vien 01'))
+         (session_id, barcode, detected_warehouse_code, matched_rule_id, customer_group, business_type, exception_status, scanned_by, detected_carrier, matched_tracking, product_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, COALESCE($8, 'Nhan vien 01'), $9, $10, $11)
        ON CONFLICT ON CONSTRAINT unique_barcode_per_session DO NOTHING
        RETURNING *`,
       // Ma kho chi luu khi that su doc/khop duoc (go tay ma vach tren web thi de trong, khong lap lai chinh barcode)
       [sessionId, barcode, (rule || hasExplicitText) ? matchText : null, rule ? rule.id : null, rule ? rule.customer_group : null,
        rule ? rule.business_type : null,
-       'NORMAL', scannedBy]   // toi day ma chac chan co trong Danh sach mat hang
+       'NORMAL', scannedBy, m.carrier, m.matched, m.product.id]   // toi day ma chac chan co trong Danh sach mat hang
     );
 
     if (!ins.rows.length) {
@@ -110,6 +111,8 @@ exports.scan = asyncHandler(async (req, res) => {
         scanned_count: up.rows[0].scanned_count,
         total_expected_packages: up.rows[0].total_expected_packages,
         in_registry: inRegistry,
+        carrier: m.carrier,
+        match_method: m.method,
         requires_import_check: !!(rule && rule.requires_import_check),
         warning: isBusiness
           ? 'HÀNG KINH DOANH - cần kiểm tra điều kiện nhập khẩu trước khi nhập kho'

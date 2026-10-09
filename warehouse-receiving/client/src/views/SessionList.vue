@@ -7,7 +7,7 @@ import CarrierLogo from '../components/CarrierLogo.vue';
 import StatusBadge from '../components/StatusBadge.vue';
 
 const router = useRouter();
-const carriers = ['DHL', 'FedEx', 'UPS', 'Amazon Logistics'];
+const carriers = ['Amazon Logistics', 'Amazon Package', 'Amazon Pallet', 'DHL', 'FEDEX EXPRESS', 'FEDEX GROUND', 'FedEx', 'Other', 'UPS', 'USPS'];
 
 const filters = reactive({ carrier: '', status: '', date: '' });
 const sessions = ref([]);

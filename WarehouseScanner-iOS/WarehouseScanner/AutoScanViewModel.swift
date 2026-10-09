@@ -51,6 +51,7 @@ final class AutoScanViewModel: ObservableObject {
 
     private struct Pending {
         var barcode: String?
+        var extras: [String] = []            // các mã vạch khác cùng đọc được trên tem (tối đa 3 mã tracking / tem)
         var warehouse: (text: String, group: String)?
         let start: Date
     }
@@ -103,7 +104,18 @@ final class AutoScanViewModel: ObservableObject {
             } else if pending?.barcode == nil {
                 pending?.barcode = code
             } else if pending?.barcode != code {
-                continue                                    // đang xử lý một nhãn khác
+                // Mã khác trong cùng khung hình = mã tracking khác trên cùng tem: gom lại, chỉ cần 1 mã có trong danh sách là nhận
+                if let p = pending, !p.extras.contains(code), p.extras.count < 4,
+                   barcodes.contains(p.barcode ?? "") { pending?.extras.append(code) }
+                continue
+            }
+            // Các mã khác đang nằm cùng khung hình với mã này
+            if var p = pending, p.barcode == code {
+                for other in barcodes {
+                    let o = other.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !o.isEmpty, o != code, !done.contains(o), !p.extras.contains(o), p.extras.count < 4 { p.extras.append(o) }
+                }
+                pending = p
             }
             // Mã kho có thể đã đọc được vài khung hình trước khi thấy mã vạch
             if pending?.warehouse == nil, let r = recentMatch, now.timeIntervalSince(r.at) < 1.5 {
@@ -159,7 +171,7 @@ final class AutoScanViewModel: ObservableObject {
     private func tryComplete() {
         guard let p = pending, let code = p.barcode, let w = p.warehouse else { return }
         clearPending()
-        submit(code: code, text: w.text, group: w.group)
+        submit(code: code, text: w.text, group: w.group, extras: p.extras)
     }
 
     /// Hết thời gian mà vẫn thiếu một trong hai -> bỏ qua, không hỏi gì.
@@ -193,22 +205,24 @@ final class AutoScanViewModel: ObservableObject {
 
     // MARK: Gửi về web
 
-    private func submit(code: String, text: String, group: String) {
+    private func submit(code: String, text: String, group: String, extras: [String] = []) {
         done.insert(code)                      // chặn gửi lặp ngay lập tức
         cooldown[code] = Date()
-        Task { await send(code: code, text: text, group: group) }
+        for x in extras { done.insert(x); cooldown[x] = Date() }
+        Task { await send(code: code, text: text, group: group, extras: extras) }
     }
 
-    private func send(code: String, text: String, group: String) async {
+    private func send(code: String, text: String, group: String, extras: [String] = []) async {
         guard let api else { return }
         do {
-            let data = try await api.scan(sessionId: session.id, barcode: code, detectedText: text)
+            let data = try await api.scan(sessionId: session.id, barcode: code, detectedText: text, altBarcodes: extras)
             if skippedAt[code] != nil { skippedAt[code] = nil; skipped = max(skipped - 1, 0) }   // trước đó bỏ qua, giờ đã đọc được
             sent += 1
             lastItem = data.item
             let g = data.item.customerGroup ?? group
-            entries.insert(ScanEntry(barcode: code, warehouseText: text, group: g, status: .sent), at: 0)
-            last = LastResult(barcode: code, group: g, warehouseText: data.item.detectedWarehouseCode ?? text, message: nil, businessType: data.item.businessType, unknown: data.item.exceptionStatus == "UNKNOWN")
+            let shown = data.item.barcode   // mã trên tem đã khớp danh sách (có thể là một trong các mã khác)
+            entries.insert(ScanEntry(barcode: shown, warehouseText: text, group: g, status: .sent), at: 0)
+            last = LastResult(barcode: shown, group: g, warehouseText: data.item.detectedWarehouseCode ?? text, message: nil, businessType: data.item.businessType, unknown: data.item.exceptionStatus == "UNKNOWN")
             Haptics.success()
             AudioServicesPlaySystemSound(1057)
         } catch let e as APIError {
@@ -219,8 +233,9 @@ final class AutoScanViewModel: ObservableObject {
                 Haptics.warning()
                 AudioServicesPlaySystemSound(1053)
             } else if e.code == "TRACKING_NOT_FOUND" {
-                // Mã không có trong Danh sách mặt hàng: web ghi FAIL, không tính là đã quét
+                // Không mã nào trên tem có trong Danh sách mặt hàng: web ghi FAIL, không tính là đã quét
                 done.remove(code)
+                for x in extras { done.remove(x); failCooldown[x] = Date() }
                 failCooldown[code] = Date()
                 failed += 1
                 entries.insert(ScanEntry(barcode: code, warehouseText: text, group: group, status: .rejected, note: "Không có trong danh sách mặt hàng"), at: 0)

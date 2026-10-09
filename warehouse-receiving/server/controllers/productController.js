@@ -23,7 +23,7 @@ function readBody(body = {}) {
   if (!FILTERS.includes(filter)) throw new HttpError(400, 'Trạng thái dịch lọc không hợp lệ', 'INVALID_FILTER');
   return {
     name, tracking_code: tracking, quantity, filter_status: filter,
-    alt_code: clean(body.alt_code, 100), order_code: clean(body.order_code, 100),
+    alt_code: clean(body.alt_code, 100), alt_code2: clean(body.alt_code2, 100), order_code: clean(body.order_code, 100),
     partner_name: clean(body.partner_name, 100), partner_note: clean(body.partner_note, 200),
   };
 }
@@ -40,7 +40,7 @@ exports.list = asyncHandler(async (req, res) => {
     const col = SEARCH_FIELDS[req.query.field] || SEARCH_FIELDS.tracking;
     params.push(`%${q}%`);
     // Tim theo tracking thi tim ca "Ma khac"
-    where.push(col === 'tracking_code' ? `(tracking_code ILIKE $${params.length} OR alt_code ILIKE $${params.length})` : `${col} ILIKE $${params.length}`);
+    where.push(col === 'tracking_code' ? `(tracking_code ILIKE $${params.length} OR alt_code ILIKE $${params.length} OR alt_code2 ILIKE $${params.length})` : `${col} ILIKE $${params.length}`);
   }
   const w = where.length ? `WHERE ${where.join(' AND ')}` : '';
   const total = Number((await db.query(`SELECT COUNT(*) FROM products ${w}`, params)).rows[0].count);
@@ -53,9 +53,9 @@ exports.list = asyncHandler(async (req, res) => {
 exports.create = asyncHandler(async (req, res) => {
   const d = readBody(req.body);
   const { rows } = await db.query(
-    `INSERT INTO products (name, quantity, filter_status, tracking_code, alt_code, order_code, partner_name, partner_note)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`,
-    [d.name, d.quantity, d.filter_status, d.tracking_code, d.alt_code, d.order_code, d.partner_name, d.partner_note]);
+    `INSERT INTO products (name, quantity, filter_status, tracking_code, alt_code, alt_code2, order_code, partner_name, partner_note)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+    [d.name, d.quantity, d.filter_status, d.tracking_code, d.alt_code, d.alt_code2, d.order_code, d.partner_name, d.partner_note]);
   res.status(201).json({ data: rows[0] });
 });
 
@@ -64,9 +64,9 @@ exports.update = asyncHandler(async (req, res) => {
   const id = parseId(req.params.id);
   const d = readBody(req.body);
   const { rows } = await db.query(
-    `UPDATE products SET name=$2, quantity=$3, filter_status=$4, tracking_code=$5, alt_code=$6,
-            order_code=$7, partner_name=$8, partner_note=$9 WHERE id=$1 RETURNING *`,
-    [id, d.name, d.quantity, d.filter_status, d.tracking_code, d.alt_code, d.order_code, d.partner_name, d.partner_note]);
+    `UPDATE products SET name=$2, quantity=$3, filter_status=$4, tracking_code=$5, alt_code=$6, alt_code2=$7,
+            order_code=$8, partner_name=$9, partner_note=$10 WHERE id=$1 RETURNING *`,
+    [id, d.name, d.quantity, d.filter_status, d.tracking_code, d.alt_code, d.alt_code2, d.order_code, d.partner_name, d.partner_note]);
   if (!rows.length) throw new HttpError(404, 'Không tìm thấy mặt hàng', 'PRODUCT_NOT_FOUND');
   res.json({ data: rows[0] });
 });

@@ -63,8 +63,16 @@ exports.getSession = asyncHandler(async (req, res) => {
   const session = s.rows[0];
 
   const items = await db.query(
-    `SELECT i.*, COALESCE((SELECT json_agg(p.file_path ORDER BY p.id) FROM item_photos p WHERE p.item_id = i.id), '[]'::json) AS photo_urls
-       FROM scanned_items i WHERE i.session_id = $1 ORDER BY i.scanned_at DESC, i.id DESC`, [id]);
+    `SELECT i.*, pr.tracking_code AS product_tracking, pr.alt_code AS product_alt, pr.alt_code2 AS product_alt2, COALESCE((SELECT json_agg(p.file_path ORDER BY p.id) FROM item_photos p WHERE p.item_id = i.id), '[]'::json) AS photo_urls
+       FROM scanned_items i LEFT JOIN products pr ON pr.id = i.product_id WHERE i.session_id = $1 ORDER BY i.scanned_at DESC, i.id DESC`, [id]);
+
+  // Ma khac cua cung mat hang (tem co toi da 3 ma): cac ma trong danh sach khac voi ma da quet
+  const norm = (x) => String(x || '').replace(/\s/g, '').toUpperCase();
+  for (const it of items.rows) {
+    const shown = norm(it.barcode);
+    it.other_codes = [it.product_tracking, it.product_alt, it.product_alt2].filter((c) => c && norm(c) !== shown);
+    delete it.product_tracking; delete it.product_alt; delete it.product_alt2;
+  }
 
   const exceptionCounts = Object.fromEntries(EXCEPTION_KEYS.map((k) => [k, 0]));
   for (const it of items.rows) if (exceptionCounts[it.exception_status] !== undefined) exceptionCounts[it.exception_status] += 1;

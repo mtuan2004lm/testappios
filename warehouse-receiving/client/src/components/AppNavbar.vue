@@ -9,6 +9,7 @@ const tabs = [
     { label: 'Phiên nhận hàng', to: '/receiving/sessions' },
     { label: 'Hàng đang giữ', to: '/receiving/detained' },
     { label: 'Vị trí kệ', to: '/receiving/bin-locations' },
+    { label: 'Định dạng mã tracking', to: '/receiving/tracking-formats' },
   ] },
   { label: 'Danh sách mặt hàng', to: '/items', match: '/items' },
   { label: 'Chuyến bay', match: '/flights', children: [

@@ -62,7 +62,7 @@ const saving = ref(false);
 const formError = ref('');
 
 function blank() {
-  return { name: '', quantity: 1, filter_status: 'UNFILTERED', tracking_code: '', alt_code: '', order_code: '', partner_name: '', partner_note: '', image_path: null };
+  return { name: '', quantity: 1, filter_status: 'UNFILTERED', tracking_code: '', alt_code: '', alt_code2: '', order_code: '', partner_name: '', partner_note: '', image_path: null };
 }
 function openAdd() { editingId.value = null; Object.assign(form, blank()); resetImage(); formError.value = ''; showForm.value = true; }
 function openEdit(r) {
@@ -177,7 +177,7 @@ async function remove() {
                   </span>
                   <button class="text-slate-500 hover:text-navy" title="Tìm theo mã này" @click="searchBy('tracking', r.tracking_code)"><Search class="h-4 w-4" /></button>
                 </div>
-                <div v-if="r.alt_code" class="mt-1 text-xs text-slate-500">Mã khác: {{ r.alt_code }}</div>
+                <div v-if="r.alt_code || r.alt_code2" class="mt-1 text-xs text-slate-500">Mã tracking khác: {{ [r.alt_code, r.alt_code2].filter(Boolean).join(', ') }}</div>
               </td>
               <td class="px-3 py-3">
                 <div v-if="r.order_code" class="flex items-center justify-between gap-2">
@@ -241,13 +241,15 @@ async function remove() {
           <label class="block text-sm font-medium text-slate-700">Tracking *
             <input v-model="form.tracking_code" class="input mt-1 font-mono" maxlength="100" />
           </label>
-          <label class="block text-sm font-medium text-slate-700">Mã khác
+          <label class="block text-sm font-medium text-slate-700">Mã tracking khác (1)
             <input v-model="form.alt_code" class="input mt-1 font-mono" maxlength="100" />
+          </label>
+          <label class="block text-sm font-medium text-slate-700">Mã tracking khác (2)
+            <input v-model="form.alt_code2" class="input mt-1 font-mono" maxlength="100" />
           </label>
           <label class="block text-sm font-medium text-slate-700">Mã đơn hàng
             <input v-model="form.order_code" class="input mt-1 font-mono" maxlength="100" />
           </label>
-          <span></span>
           <label class="block text-sm font-medium text-slate-700">Đối tác
             <input v-model="form.partner_name" class="input mt-1" maxlength="100" />
           </label>

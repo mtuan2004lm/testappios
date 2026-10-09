@@ -6,6 +6,7 @@ import ItemsList from '../views/ItemsList.vue';
 import FlightsManagement from '../views/FlightsManagement.vue';
 import HoldsList from '../views/HoldsList.vue';
 import BinLocations from '../views/BinLocations.vue';
+import TrackingFormats from '../views/TrackingFormats.vue';
 import TrackingCodes from '../views/TrackingCodes.vue';
 
 export default createRouter({
@@ -16,6 +17,7 @@ export default createRouter({
     { path: '/receiving/sessions/:id/scan', name: 'scan', component: SessionScan, props: true },
     { path: '/receiving/detained', name: 'detained', component: HoldsList },
     { path: '/receiving/bin-locations', name: 'bins', component: BinLocations },
+    { path: '/receiving/tracking-formats', name: 'formats', component: TrackingFormats },
     // Cac tab chua co chuc nang: hien trang tam
     { path: '/items', name: 'items', component: ItemsList },
     { path: '/flights', name: 'flights', component: FlightsManagement },

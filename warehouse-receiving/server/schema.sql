@@ -162,12 +162,57 @@ CREATE TABLE IF NOT EXISTS holds (
 CREATE INDEX IF NOT EXISTS idx_holds_status ON holds (status, hold_type);
 CREATE INDEX IF NOT EXISTS idx_holds_opened ON holds (opened_at DESC);
 
+-- 7e. Dinh dang ma tracking theo hang van chuyen -------------------------
+-- Tu ma vach quet duoc, suy ra cac "ma ung vien" (tracking that) de doi chieu voi Danh sach mat hang.
+-- extract_mode: FULL = giu nguyen | LAST = lay N ky tu cuoi | DROP_FIRST = bo N ky tu dau | REGEX = lay nhom khop (param la regex)
+CREATE TABLE IF NOT EXISTS tracking_formats (
+  id            SERIAL PRIMARY KEY,
+  carrier       VARCHAR(30)  NOT NULL,             -- USPS, UPS, FEDEX, DHL, AMAZON
+  name          VARCHAR(100) NOT NULL UNIQUE,      -- Mo ta ngan
+  detect_regex  VARCHAR(200) NOT NULL,             -- Ap len ma da chuan hoa (bo khoang trang, chu hoa)
+  extract_mode  VARCHAR(20)  NOT NULL DEFAULT 'FULL' CHECK (extract_mode IN ('FULL','LAST','DROP_FIRST','REGEX')),
+  extract_param VARCHAR(200),
+  is_active     BOOLEAN NOT NULL DEFAULT TRUE,
+  sort_order    INT NOT NULL DEFAULT 100
+);
+INSERT INTO tracking_formats (carrier, name, detect_regex, extract_mode, extract_param, sort_order) VALUES
+  ('USPS',   'USPS: 420 + ZIP5 + tracking',              '^420\d{5}\d{20,}$',                  'DROP_FIRST', '8',   10),
+  ('USPS',   'USPS: 420 + ZIP9 + tracking',              '^420\d{9}\d{20,}$',                  'DROP_FIRST', '12',  11),
+  ('USPS',   'USPS: 20–34 số bắt đầu bằng 9',            '^9\d{19,33}$',                        'FULL',       NULL,  12),
+  ('USPS',   'USPS quốc tế: 2 chữ + 9 số + US',          '^[A-Z]{2}\d{9}US$',                   'FULL',       NULL,  13),
+  ('UPS',    'UPS: 1Z + 16 ký tự (kể cả khi nằm trong chuỗi dài)', '1Z[0-9A-Z]{16}',            'REGEX',      '1Z[0-9A-Z]{16}', 20),
+  ('FEDEX',  'FedEx Express: mã vạch 30–34 số, tracking = 12 số cuối', '^\d{30,34}$',           'LAST',       '12',  30),
+  ('FEDEX',  'FedEx Ground: mã vạch 96 + 20 số, tracking = 15 số cuối', '^96\d{20}$',          'LAST',       '15',  31),
+  ('FEDEX',  'FedEx SmartPost / Ground Economy: 92 + 20 số', '^92\d{20}$',                      'LAST',       '20',  32),
+  ('FEDEX',  'FedEx: 12 hoặc 15 số in trên nhãn',        '^(\d{12}|\d{15})$',                  'FULL',       NULL,  33),
+  ('DHL',    'DHL Express: 10 số',                       '^\d{10}$',                            'FULL',       NULL,  40),
+  ('DHL',    'DHL eCommerce: JD / JJD / JVGL / GM + số', '^(JD|JJD|JVGL|GM)\d{16,20}$',         'FULL',       NULL,  41),
+  ('AMAZON', 'Amazon Logistics: TBA / TBC / TBM + 12 số (kể cả khi nằm trong chuỗi dài)', 'TB[ACM]\d{12}', 'REGEX', 'TB[ACM]\d{12}', 50)
+ON CONFLICT (name) DO NOTHING;
+
+-- Moi don hang toi da 3 ma tracking: tracking_code + alt_code + alt_code2
+ALTER TABLE products ADD COLUMN IF NOT EXISTS alt_code2 VARCHAR(100);
+
+-- Ma da chuan hoa (bo khoang trang, chu hoa) de doi chieu nhanh bang chi muc
+ALTER TABLE products ADD COLUMN IF NOT EXISTS tracking_norm TEXT GENERATED ALWAYS AS (upper(regexp_replace(tracking_code, '\s', '', 'g'))) STORED;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS alt_norm      TEXT GENERATED ALWAYS AS (upper(regexp_replace(coalesce(alt_code, ''), '\s', '', 'g'))) STORED;
+ALTER TABLE products ADD COLUMN IF NOT EXISTS alt2_norm     TEXT GENERATED ALWAYS AS (upper(regexp_replace(coalesce(alt_code2, ''), '\s', '', 'g'))) STORED;
+CREATE INDEX IF NOT EXISTS idx_products_alt2_norm     ON products (alt2_norm) WHERE alt2_norm <> '';
+CREATE INDEX IF NOT EXISTS idx_products_tracking_norm ON products (tracking_norm);
+CREATE INDEX IF NOT EXISTS idx_products_alt_norm      ON products (alt_norm) WHERE alt_norm <> '';
+
+-- Kien da quet: hang van chuyen nhan dien duoc + ma tracking (trong danh sach) da khop, dung de chan trung giua cac dang ma
+ALTER TABLE scanned_items ADD COLUMN IF NOT EXISTS detected_carrier VARCHAR(30);
+ALTER TABLE scanned_items ADD COLUMN IF NOT EXISTS matched_tracking VARCHAR(100);
+ALTER TABLE scanned_items ADD COLUMN IF NOT EXISTS product_id BIGINT;   -- mat hang trong Danh sach mat hang da khop
+CREATE INDEX IF NOT EXISTS idx_items_matched ON scanned_items (session_id, matched_tracking);
+
 -- 8. Dong bo bo dem id (sequence) voi du lieu hien co ----------------------
 -- Can khi du lieu duoc chep tu database khac (pg_dump --data-only): neu khong, INSERT moi se trung id (loi 409).
 DO $$
 DECLARE t TEXT;
 BEGIN
-  FOREACH t IN ARRAY ARRAY['receiving_sessions','scanned_items','tracking_codes','item_photos','products','flights','bin_locations','holds','warehouse_rules'] LOOP
+  FOREACH t IN ARRAY ARRAY['receiving_sessions','scanned_items','tracking_codes','item_photos','products','flights','bin_locations','holds','tracking_formats','warehouse_rules'] LOOP
     EXECUTE format(
       'SELECT setval(pg_get_serial_sequence(%L, ''id''), GREATEST(COALESCE((SELECT MAX(id) FROM %I), 0), 1), (SELECT COUNT(*) > 0 FROM %I))',
       t, t, t);

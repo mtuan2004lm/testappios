@@ -74,9 +74,11 @@ struct APIClient {
     }
 
     /// Gửi MỘT lần cả mã vạch lẫn mã kho đọc được từ nhãn. Server tự khớp quy tắc để ra nhóm khách hàng/kho.
-    func scan(sessionId: Int, barcode: String, detectedText: String) async throws -> ScanData {
+    func scan(sessionId: Int, barcode: String, detectedText: String, altBarcodes: [String] = []) async throws -> ScanData {
+        var body: [String: Any] = ["barcode": barcode, "detected_text": detectedText]
+        if !altBarcodes.isEmpty { body["alt_barcodes"] = altBarcodes }   // các mã khác trên cùng tem: chỉ cần 1 mã có trong danh sách
         let r: ObjectResponse<ScanData> = try await perform("POST", "/api/v1/receiving/sessions/\(sessionId)/scan",
-                                                            json: ["barcode": barcode, "detected_text": detectedText], timeout: 3)
+                                                            json: body, timeout: 3)
         return r.data
     }
 

@@ -14,6 +14,7 @@ client/   Vue 3 SPA (src/views/: SessionList, SessionScan, ItemsList, TrackingCo
 | Nhận hàng | `/receiving/sessions` | Danh sách phiên tiếp nhận, tạo phiên (nhập tay số kiện) |
 | (màn quét) | `/receiving/sessions/:id/scan` | Quét mã bằng máy quét, nhập tay hoặc **camera web**; sửa số kiện ngay trên trang; tự cập nhật mỗi 2 giây khi iPhone gửi mã về |
 | (menu Nhận hàng ▾) Hàng đang giữ | `/receiving/detained` | Kiện chưa được bay: tab *Kho giữ / Hold*, *Khách yêu cầu / Block*, *Đã xử lý*; lọc, gán vị trí, đánh dấu đã xử lý (xem mục bên dưới) |
+| (menu Nhận hàng ▾) Định dạng mã tracking | `/receiving/tracking-formats` | Bảng định dạng mã theo hãng + ô **Thử mã vạch** (xem mục bên dưới) |
 | (menu Nhận hàng ▾) Vị trí kệ | `/receiving/bin-locations` | Quản lý vị trí kệ trong kho; thêm một hoặc nhiều vị trí (xem mục bên dưới) |
 | Danh sách mặt hàng | `/items` | Danh sách đơn hàng/mặt hàng (xem mục bên dưới). **Quyết định mã quét có "xác định" hay không** |
 | Chuyến bay ▾ → Quản lý chuyến bay | `/flights` | Quản lý chuyến bay gom hàng (xem mục bên dưới) |
@@ -81,6 +82,14 @@ Muốn gõ `psql` trực tiếp: thêm `export PATH="/Applications/Postgres.app/
 - Tab **Thêm vị trí** (một vị trí) và **Thêm nhiều vị trí**: mỗi ô nhận khoảng hoặc danh sách (`01-05`, `A-C`, `1,3,5`), hệ thống tạo mọi tổ hợp (tối đa 1000, mã đã có thì bỏ qua) và xem trước số lượng.
 - Danh sách có tìm theo mã/tên gọi, sửa (bút chì), xóa (thùng rác). Xóa vị trí thì hàng đang giữ ở đó thành "chưa có vị trí".
 
+### Định dạng mã tracking (`/receiving/tracking-formats`)
+- Mỗi hãng in mã vạch khác nhau (FedEx 34 số, USPS có tiền tố `420`+ZIP, UPS `1Z…`, Amazon `TBA…`). Khi quét, server **chuẩn hóa** mã (bỏ khoảng trắng/ký tự ẩn, chữ hoa), rồi dựa vào bảng `tracking_formats` rút ra các **mã ứng viên** (vd FedEx 34 số → 12 số cuối) và so khớp chính xác với cột `tracking_norm` / `alt_norm` của Danh sách mặt hàng.
+- Thứ tự thử: mã gốc → mã rút theo định dạng → (dự phòng) mã trong danh sách từ 10 ký tự nằm trong mã vạch. Kết quả khớp có `match_method` = `EXACT` / `DERIVED` / `CONTAINS` và `carrier` (hãng của **mã đã khớp**). Hãng và mã đã khớp được lưu vào kiện (`detected_carrier`, `matched_tracking`, `product_id`); cùng một kiện quét bằng mã khác → báo **MÃ TRÙNG**, không tính hai kiện.
+- Định dạng mẫu có sẵn: USPS (420+ZIP5/ZIP9, 20–34 số bắt đầu bằng 9, quốc tế), UPS (`1Z`+16), FedEx (Express 30–34 số → 12 số cuối; Ground `96`+20 → 15 số cuối; SmartPost `92`+20; 12/15 số in trên nhãn), DHL (10 số; JD/JJD/JVGL/GM), Amazon (TBA/TBC/TBM+12). **Các định dạng này dựa trên quy ước thông dụng, cần kiểm lại với nhãn thật của từng hãng** — dùng ô *Thử mã vạch* để dán mã quét được và xem hệ thống rút ra mã nào, khớp mặt hàng nào; thiếu thì bấm *Thêm định dạng* (hãng, regex nhận biết, cách rút: giữ nguyên / lấy N ký tự cuối / bỏ N ký tự đầu / lấy phần khớp regex).
+- **Phiên không giới hạn hãng**: phiên của hãng nào cũng quét được mã của mọi hãng. Một tem có thể có tối đa **3 mã tracking**: chỉ cần **1 trong các mã** có trong Danh sách mặt hàng là nhận. App iPhone gửi mã chính + các mã vạch khác trong cùng khung hình (`alt_barcodes`, tối đa 5); server thử lần lượt, mã nào khớp trước thì dùng và hiển thị **hãng của mã đó**. Không mã nào có trong danh sách → **FAIL** (`TRACKING_NOT_FOUND`). Mỗi mặt hàng có tối đa **3 mã tracking**: `tracking_code` + `alt_code` + `alt_code2` (form Danh sách mặt hàng có ô *Mã khác (1)* và *Mã khác (2)*); quét mã nào trong 3 mã cũng nhận, bảng kiện của phiên hiện dòng "Mã khác".
+- Danh sách hãng khi tạo phiên: Amazon Logistics, Amazon Package, Amazon Pallet, DHL, FEDEX EXPRESS, FEDEX GROUND, FedEx, Other, UPS, USPS.
+- Cột *Mã* trong lịch sử quét hiện thêm nhãn hãng nhận diện được.
+
 Nếu không có `.env`, server dùng mặc định của `pg` (user máy, database trùng tên user) → nhớ tạo `.env` trỏ đúng `warehouse`.
 
 ## Bảng dữ liệu (`server/schema.sql`)
@@ -94,6 +103,7 @@ Nếu không có `.env`, server dùng mặc định của `pg` (user máy, datab
 | `item_photos` | Ảnh hàng hỏng chụp từ app iOS |
 | `flights` | **Chuyến bay** (tên, MAWB, hãng, tuyến, hình thức Tiểu/Chính ngạch, trạng thái OPEN/CLOSED/ARRIVED, ETD/ETA, thùng, HAWB) |
 | `bin_locations` | **Vị trí kệ** (mã ghép từ Khu-Tiểu khu-Lối-Giá-Tầng-Ô, tên gọi) |
+| `tracking_formats` | **Định dạng mã tracking theo hãng** (hãng, regex nhận biết, cách rút mã, bật/tắt, thứ tự) |
 | `holds` | **Hàng đang giữ** (tracking, mã vụ, loại WAREHOUSE/CUSTOMER, lý do, trạng thái ACTIVE/RESOLVED, vị trí) |
 | `products` | **Danh sách mặt hàng** (tên, ảnh, SL, trạng thái dịch lọc, tracking, mã khác, mã đơn hàng, đối tác) |
 
@@ -126,7 +136,7 @@ Nếu không có `.env`, server dùng mặc định của `pg` (user máy, datab
 | POST | `/api/v1/receiving/sessions` | Tạo phiên (`carrier_name` bắt buộc, `total_expected_packages` nhập tay) | Web |
 | GET | `/api/v1/receiving/sessions/:id` | Phiên + kiện đã quét + đếm ngoại lệ + kết quả quét gần nhất (`last_scan_*`); web hỏi lại mỗi 2 giây | Web |
 | PATCH | `/api/v1/receiving/sessions/:id` | Sửa số kiện dự kiến `{total_expected_packages}` | Web |
-| POST | `/api/v1/receiving/sessions/:id/scan` | `{barcode, detected_text}`: tra Danh sách mặt hàng (kể cả mã USPS `420`+ZIP), khớp regex mã kho, lưu kiện. Không có trong danh sách → **422 `TRACKING_NOT_FOUND`** (FAIL). Trùng trong phiên → **409 `DUPLICATE_BARCODE`** (MÃ TRÙNG) | Web, iOS |
+| POST | `/api/v1/receiving/sessions/:id/scan` | `{barcode, detected_text, alt_barcodes?}`: tra Danh sách mặt hàng (kể cả mã USPS `420`+ZIP; thử `barcode` rồi các `alt_barcodes`), khớp regex mã kho, lưu kiện, trả `carrier` + `match_method`. Không có trong danh sách → **422 `TRACKING_NOT_FOUND`** (FAIL). Trùng kiện trong phiên → **409 `DUPLICATE_BARCODE`** (MÃ TRÙNG) | Web, iOS |
 | POST | `/api/v1/receiving/sessions/:id/scan-fail` | `{detected_text}`: app đọc được mã kho nhưng không đọc được mã vạch; chỉ ghi khi mã kho khớp quy tắc (nếu không → 422); tăng bộ đếm FAIL | iOS |
 | POST | `/api/v1/receiving/sessions/:id/classify` | `{barcode, detected_text}`: gán nhóm KH cho kiện đã quét (404 `ITEM_NOT_SCANNED` nếu chưa quét). Còn trong code, app hiện tại không gọi | (dự phòng) |
 | PATCH | `/api/v1/receiving/sessions/:id/finalize` | "Chốt kiện": đặt tổng kiện = số đã quét | Web |
@@ -175,6 +185,16 @@ Nếu không có `.env`, server dùng mặc định của `pg` (user máy, datab
 | PATCH | `/api/v1/holds/bulk` | `{ids, action: "assign" \| "resolve", bin_location_id}` | Web |
 | DELETE | `/api/v1/holds/:id` | Xóa bản ghi giữ hàng | Web |
 
+### Định dạng mã tracking
+
+| Method | Đường dẫn | Mô tả | Dùng bởi |
+|---|---|---|---|
+| GET | `/api/v1/tracking-formats` | Danh sách định dạng mã theo hãng | Web |
+| POST | `/api/v1/tracking-formats` | Thêm định dạng `{carrier, name, detect_regex, extract_mode, extract_param, is_active, sort_order}` (400 nếu regex sai) | Web |
+| POST | `/api/v1/tracking-formats/test` | `{barcode, carrier_name?}` thử đối chiếu, không ghi gì: trả mã chuẩn hóa, hãng, cách khớp, các mã ứng viên, mặt hàng khớp | Web |
+| PUT | `/api/v1/tracking-formats/:id` | Sửa định dạng (cũng dùng để bật/tắt) | Web |
+| DELETE | `/api/v1/tracking-formats/:id` | Xóa định dạng | Web |
+
 ### Vị trí kệ
 
 | Method | Đường dẫn | Mô tả | Dùng bởi |
@@ -217,3 +237,6 @@ Xem `../WarehouseScanner-iOS/README.md`. Tóm tắt: iPhone chỉ làm máy qué
 - Tài liệu ngoài dự án: file **báo cáo PDF** "Hệ thống nhận hàng tại kho" (5 trang) để trình bày với cấp trên; tổng hợp vấn đề/giải pháp, kiến trúc, màn hình web, quy tắc quét SUCCESS/FAIL/MÃ TRÙNG, bảng mã kho → nhóm KH → loại hình, hiện trạng và đề xuất.
 - Thanh điều hướng chỉ còn một kho **OR_1 - Hub Oregon** (bỏ danh sách CA_1, TX_1). README có mục *API (tất cả endpoint đang dùng)* liệt kê đầy đủ endpoint, kể cả `/api/health`, `/uploads` và `scan-fail`, kèm bên dùng (Web / iOS).
 - **Khớp mã vạch FedEx dài**: nhãn FedEx có mã vạch dài (vd 34 số) chứa mã tracking in trên nhãn (vd `3004 7009 2728` = 12 số cuối). Server nay coi là khớp nếu mã trong Danh sách mặt hàng (từ 10 ký tự trở lên, bỏ khoảng trắng) nằm trong mã vạch quét được. Quy tắc mã kho coi dấu `_` và khoảng trắng là như nhau (nhãn in `SG HUE DOFA168`, quy tắc viết `SG HUE_DOFA168`). Cần khởi động lại server.
+- **Quét theo định dạng từng hãng vận chuyển**: thêm bảng `tracking_formats` (seed USPS, UPS, FedEx, DHL, Amazon), cột chuẩn hóa `products.tracking_norm` / `alt_norm` có chỉ mục, cột `scanned_items.detected_carrier` / `matched_tracking`, trang *Định dạng mã tracking* (có ô thử mã), 5 API `/tracking-formats`. Chống trùng theo mã tracking đã khớp. Danh sách hãng của phiên mở rộng thành 10 loại. Chạy `npm run db:init`, khởi động lại server, tải lại web; app iPhone không cần build lại.
+- **Một tem nhiều mã tracking, mọi phiên quét được mọi hãng**: bỏ giới hạn hãng theo phiên; chỉ cần 1 trong tối đa 3 mã trên tem có trong Danh sách mặt hàng, hiển thị hãng của mã khớp. Thêm cột `scanned_items.product_id` và tham số `alt_barcodes`. Chạy `npm run db:init`, khởi động lại server, tải lại web và **build lại app iPhone** (⚙️ → Bản app: "tem nhiều mã tracking").
+- **Mỗi mặt hàng tối đa 3 mã tracking**: thêm cột `products.alt_code2` (+ cột chuẩn hóa `alt2_norm`); form thêm/sửa mặt hàng có 2 ô mã khác; bảng kiện của phiên hiện "Mã khác". Chạy `npm run db:init`, khởi động lại server, tải lại web.

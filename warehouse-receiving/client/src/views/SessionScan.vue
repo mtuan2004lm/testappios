@@ -359,7 +359,8 @@ onMounted(async () => {
                 <tr v-if="!filtered.length"><td colspan="6" class="px-4 py-10 text-center text-slate-400">Chưa có kiện nào.</td></tr>
                 <tr v-for="i in filtered" :key="i.id">
                   <td class="px-4 py-2 text-xs text-slate-500">{{ fmtTime(i.scanned_at) }}</td>
-                  <td class="px-4 py-2 font-mono text-xs font-semibold">{{ i.barcode }}</td>
+                  <td class="px-4 py-2 font-mono text-xs font-semibold">{{ i.barcode }}<span v-if="i.detected_carrier" class="ml-2 rounded bg-slate-100 px-1.5 py-0.5 font-sans text-[10px] font-bold text-slate-600">{{ i.detected_carrier }}</span>
+                    <div v-if="i.other_codes?.length" class="mt-0.5 font-sans text-[11px] font-normal text-slate-500">Mã tracking khác: {{ i.other_codes.join(', ') }}</div></td>
                   <td class="px-4 py-2">{{ i.customer_group || '—' }}</td>
                   <td class="px-4 py-2 font-mono text-xs">{{ i.detected_warehouse_code || '—' }}</td>
                   <td class="px-4 py-2">

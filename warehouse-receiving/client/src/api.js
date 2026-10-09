@@ -58,6 +58,11 @@ export const api = {
   bulkBins: (items) => request('POST', '/bin-locations/bulk', { items }),
   updateBin: (id, body) => request('PUT', `/bin-locations/${id}`, body),
   deleteBin: (id) => request('DELETE', `/bin-locations/${id}`),
+  listFormats: () => request('GET', '/tracking-formats'),
+  createFormat: (body) => request('POST', '/tracking-formats', body),
+  updateFormat: (id, body) => request('PUT', `/tracking-formats/${id}`, body),
+  deleteFormat: (id) => request('DELETE', `/tracking-formats/${id}`),
+  testFormat: (body) => request('POST', '/tracking-formats/test', body),
   setException: (itemId, exception_status) => request('PATCH', `/scanned-items/${itemId}/exception`, { exception_status }),
 };
 
