@@ -37,6 +37,23 @@ exports.setException = asyncHandler(async (req, res) => {
 
 const UPLOAD_DIR = path.join(__dirname, '..', 'uploads');
 
+// POST /api/v1/scanned-items/:id/label-photo   (body: anh JPEG/PNG tho)
+// Anh label cua kien (de nhan vien VN doc thong tin tren label, kiem duyet va cap nhat cho khach). Khong doi trang thai kien.
+exports.addLabelPhoto = asyncHandler(async (req, res) => {
+  const id = parseId(req.params.id);
+  if (!Buffer.isBuffer(req.body) || !req.body.length) throw new HttpError(400, 'Thiếu dữ liệu ảnh (Content-Type: image/jpeg)', 'PHOTO_REQUIRED');
+  const exists = await db.query('SELECT 1 FROM scanned_items WHERE id = $1', [id]);
+  if (!exists.rows.length) throw new HttpError(404, 'Không tìm thấy kiện hàng', 'ITEM_NOT_FOUND');
+  const ext = /png/i.test(req.headers['content-type'] || '') ? 'png' : 'jpg';
+  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+  const file = `label-${id}-${Date.now()}.${ext}`;
+  fs.writeFileSync(path.join(UPLOAD_DIR, file), req.body);
+  const urlPath = `/uploads/${file}`;
+  await db.query(`INSERT INTO item_photos (item_id, file_path, kind) VALUES ($1, $2, 'LABEL')`, [id, urlPath]);
+  const { rows } = await db.query('SELECT * FROM scanned_items WHERE id = $1', [id]);
+  res.status(201).json({ data: { item: rows[0], photo_url: urlPath } });
+});
+
 // POST /api/v1/scanned-items/:id/damage-photo   (body: anh JPEG/PNG tho, Content-Type: image/jpeg)
 // Gan anh vao kien va danh dau DAMAGED
 exports.addDamagePhoto = asyncHandler(async (req, res) => {

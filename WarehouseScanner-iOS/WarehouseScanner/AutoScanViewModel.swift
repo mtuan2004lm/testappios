@@ -3,7 +3,7 @@ import AudioToolbox
 
 /// Một dòng trong lịch sử quét.
 struct ScanEntry: Identifiable {
-    enum Status { case sent, noWarehouseCode, noBarcode, duplicate, rejected }
+    enum Status { case sent, noWarehouseCode, noBarcode, duplicate, rejected, tracked, noName }
     let id = UUID()
     let barcode: String
     var warehouseText: String?
@@ -23,6 +23,9 @@ struct LastResult: Equatable {
     var duplicate: Bool = false // true: nhãn đã quét trước đó trong phiên -> MÃ TRÙNG
     var failed: Bool = false    // true: đọc được mã kho nhưng không đọc được mã vạch -> FAIL
     var unknown: Bool = false   // true: mã không có trong Danh sách mặt hàng -> "Không xác định"
+    var track: Int? = nil       // 1...3: tracking chưa có thông tin ("ting"), chờ tracking tiếp theo hoặc END CODE
+    var noName: Bool = false    // true: quét END CODE -> kiện NO NAME (tracking đầu làm tracking gốc)
+    var endBlocked: Bool = false // true: đã đủ 3 tracking không có thông tin mà vẫn quét tiếp -> bị chặn
 }
 
 /// QUÉT TỰ ĐỘNG: mỗi nhãn chỉ cần đưa vào khung một lần.
@@ -41,13 +44,15 @@ final class AutoScanViewModel: ObservableObject {
     @Published var last: LastResult?
     @Published var lastItem: ScannedItem?     // kiện gửi thành công gần nhất (để gắn ảnh hỏng nếu cần)
     @Published var banner: String?
+    @Published var pendingTracks = 0          // số tracking chưa có thông tin của tem đang quét (0...3)
+    @Published var endRequired = false        // true: bắt buộc quét QR END CODE (pop-up chặn)
 
     let session: ReceivingSession
     var api: APIClient?
     var matcher = RuleMatcher(rules: [])
 
     /// Thời gian tối đa gom đủ barcode + mã kho cho một nhãn (mục tiêu ~2 giây).
-    let window: TimeInterval = 2.0
+    let window: TimeInterval = 1.5
 
     private struct Pending {
         var barcode: String?
@@ -65,6 +70,8 @@ final class AutoScanViewModel: ObservableObject {
     private var suppressTextUntil = Date.distantPast     // nhãn đã gửi vẫn đang trong khung -> không coi chữ mã kho là nhãn mới
     private var failCooldown: [String: Date] = [:]        // mã kho đã báo FAIL -> không báo lặp khi nhãn vẫn nằm trong khung
     private var retryList: [(code: String, text: String, group: String)] = []
+    private var endCodeAt: Date?
+    private var lastLabel: (text: String, group: String)?     // mã kho của tem đang quét (dùng cho các tracking tiếp theo của cùng tem)
     private var timerTask: Task<Void, Never>?
     private var retryTask: Task<Void, Never>?
 
@@ -78,11 +85,24 @@ final class AutoScanViewModel: ObservableObject {
 
     // MARK: Đầu vào từ camera
 
+    /// QR "END CODE" (mã cố định dùng chung): kết thúc tem khi cả 3 tracking đều không có thông tin.
+    static func isEndCode(_ s: String) -> Bool {
+        let n = s.uppercased().filter { !" _-".contains($0) }
+        return n == "ENDCODE"
+    }
+
     func handle(barcodes: [String]) {
         let now = Date()
         for raw in barcodes {
             let code = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !code.isEmpty else { continue }
+            if Self.isEndCode(code) {
+                if let t = endCodeAt, now.timeIntervalSince(t) < 3 { continue }
+                endCodeAt = now
+                clearPending()
+                Task { await send(code: "END CODE", text: lastLabel?.text ?? "", group: "") }   // không cần đọc mã kho
+                continue
+            }
             let prevSeen = lastSeen[code]
             lastSeen[code] = now
             if done.contains(code) {
@@ -113,7 +133,7 @@ final class AutoScanViewModel: ObservableObject {
             if var p = pending, p.barcode == code {
                 for other in barcodes {
                     let o = other.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if !o.isEmpty, o != code, !done.contains(o), !p.extras.contains(o), p.extras.count < 4 { p.extras.append(o) }
+                    if !o.isEmpty, o != code, !Self.isEndCode(o), !done.contains(o), !p.extras.contains(o), p.extras.count < 4 { p.extras.append(o) }
                 }
                 pending = p
             }
@@ -133,6 +153,7 @@ final class AutoScanViewModel: ObservableObject {
         if let t = failCooldown[hit.text], now.timeIntervalSince(t) < 8 { return }   // nhãn vừa báo FAIL, đừng báo lặp
         let m = (text: hit.text, group: hit.rule.customerGroup)
         recentMatch = (text: m.text, group: m.group, at: now)
+        lastLabel = m
         if pending == nil {
             begin(Pending(barcode: nil, warehouse: m, start: now))
         } else if pending?.warehouse == nil {
@@ -183,14 +204,10 @@ final class AutoScanViewModel: ObservableObject {
             reportFail(text: w.text, group: w.group)
             return
         }
-        guard let code = p?.barcode, p?.warehouse == nil else { return }
-        cooldown[code] = Date()
-        let now = Date()
-        if let t = skippedAt[code], now.timeIntervalSince(t) < 60 { return }   // đã đếm rồi
-        skippedAt[code] = now
-        skipped += 1
-        entries.insert(ScanEntry(barcode: code, status: .noWarehouseCode, note: "Không đọc được mã kho"), at: 0)
-        last = LastResult(barcode: code, group: nil, warehouseText: nil, message: "Không đọc được mã kho")
+        // Có mã vạch nhưng chưa đọc được mã kho: vẫn gửi tracking (không bỏ sót ting / yes); mã kho lấy của tem đang quét nếu có
+        guard let p, let code = p.barcode, p.warehouse == nil else { return }
+        let text = pendingTracks > 0 ? (lastLabel?.text ?? "") : ""
+        submit(code: code, text: text, group: lastLabel?.group ?? "", extras: p.extras)
     }
 
     private func reportFail(text: String, group: String) {
@@ -212,34 +229,62 @@ final class AutoScanViewModel: ObservableObject {
         Task { await send(code: code, text: text, group: group, extras: extras) }
     }
 
+    /// Gửi MỘT tracking. `extras` = các mã khác cùng thấy trên tem: nếu tracking này "ting" (chưa có thông tin) thì gửi tiếp
+    /// mã kế tiếp theo thứ tự (tracking 2, 3); nếu đã "yes" hoặc NO NAME thì bỏ qua các mã còn lại (cùng một kiện).
     private func send(code: String, text: String, group: String, extras: [String] = []) async {
         guard let api else { return }
         do {
-            let data = try await api.scan(sessionId: session.id, barcode: code, detectedText: text, altBarcodes: extras)
-            if skippedAt[code] != nil { skippedAt[code] = nil; skipped = max(skipped - 1, 0) }   // trước đó bỏ qua, giờ đã đọc được
+            let data = try await api.scan(sessionId: session.id, barcode: code, detectedText: text)
+            if skippedAt[code] != nil { skippedAt[code] = nil; skipped = max(skipped - 1, 0) }
+            let status = data.status ?? "SUCCESS"
+            if status == "TRACK" {
+                // Tracking chưa có thông tin: "ting", ghi lại, chờ tracking tiếp theo hoặc END CODE
+                let seq = data.seq ?? (pendingTracks + 1)
+                pendingTracks = seq
+                let needEnd = data.needEndCode == true
+                if needEnd { endRequired = true }
+                let msg = needEnd ? "Đủ 3 tracking — quét QR END CODE" : "Tracking \(seq)/3 chưa có thông tin"
+                entries.insert(ScanEntry(barcode: code, warehouseText: (text.isEmpty || text == code) ? nil : text, status: .tracked, note: msg), at: 0)
+                last = LastResult(barcode: code, group: nil, warehouseText: nil, message: msg, track: seq)
+                Haptics.warning()
+                AudioServicesPlaySystemSound(1103)   // "ting"
+                if let next = extras.first { await send(code: next, text: text, group: group, extras: Array(extras.dropFirst())) }
+                return
+            }
+            guard let item = data.item else { return }
+            let noName = status == "NO_NAME"
+            pendingTracks = 0
+            endRequired = false
             sent += 1
-            lastItem = data.item
-            let g = data.item.customerGroup ?? group
-            let shown = data.item.barcode   // mã trên tem đã khớp danh sách (có thể là một trong các mã khác)
-            entries.insert(ScanEntry(barcode: shown, warehouseText: text, group: g, status: .sent), at: 0)
-            last = LastResult(barcode: shown, group: g, warehouseText: data.item.detectedWarehouseCode ?? text, message: nil, businessType: data.item.businessType, unknown: data.item.exceptionStatus == "UNKNOWN")
-            Haptics.success()
-            AudioServicesPlaySystemSound(1057)
+            lastItem = item
+            let g = item.customerGroup ?? group
+            let shown = item.barcode
+            entries.insert(ScanEntry(barcode: shown, warehouseText: text, group: g, status: noName ? .noName : .sent, note: noName ? "NO NAME" : nil), at: 0)
+            last = LastResult(barcode: shown, group: g, warehouseText: item.detectedWarehouseCode ?? (text.isEmpty ? nil : text), message: nil, businessType: item.businessType, unknown: item.exceptionStatus == "UNKNOWN", noName: noName)
+            if noName { Haptics.warning(); AudioServicesPlaySystemSound(1103) }
+            else { Haptics.success(); AudioServicesPlaySystemSound(1057) }   // "yes"
         } catch let e as APIError {
+            if e.isEndCodeRequired {
+                // Đã đủ 3 tracking không có thông tin mà quét tiếp -> pop-up chặn, bắt buộc quét QR END CODE
+                done.remove(code)
+                for x in extras { done.remove(x) }
+                endRequired = true
+                pendingTracks = 3
+                last = LastResult(barcode: code, group: nil, warehouseText: nil, message: "Bắt buộc quét QR END CODE", endBlocked: true)
+                Haptics.warning()
+                AudioServicesPlaySystemSound(1053)
+                return
+            }
+            if e.code == "NO_PENDING_TRACKS" {
+                banner = "Chưa có tracking nào đang chờ — không cần END CODE"
+                endRequired = false; pendingTracks = 0       // server không còn tem nào đang chờ -> gỡ pop-up chặn
+                Task { try? await Task.sleep(nanoseconds: 3_000_000_000); banner = nil }
+                return
+            }
             if e.isDuplicate {
                 skipped += 1
                 entries.insert(ScanEntry(barcode: code, warehouseText: text == code ? nil : text, status: .duplicate, note: "Đã quét trước đó"), at: 0)
                 last = LastResult(barcode: code, group: nil, warehouseText: nil, message: "Mã đã quét trong phiên", duplicate: true)
-                Haptics.warning()
-                AudioServicesPlaySystemSound(1053)
-            } else if e.code == "TRACKING_NOT_FOUND" {
-                // Không mã nào trên tem có trong Danh sách mặt hàng: web ghi FAIL, không tính là đã quét
-                done.remove(code)
-                for x in extras { done.remove(x); failCooldown[x] = Date() }
-                failCooldown[code] = Date()
-                failed += 1
-                entries.insert(ScanEntry(barcode: code, warehouseText: text, group: group, status: .rejected, note: "Không có trong danh sách mặt hàng"), at: 0)
-                last = LastResult(barcode: code, group: group, warehouseText: text, message: "Mã không có trong danh sách mặt hàng", failed: true)
                 Haptics.warning()
                 AudioServicesPlaySystemSound(1053)
             } else if e.isNetwork {
@@ -271,6 +316,20 @@ final class AutoScanViewModel: ObservableObject {
                 self.queued = self.retryList.count
             }
         }
+    }
+
+    // MARK: Ảnh label (gắn vào kiện vừa gửi; nhân viên VN kiểm duyệt trên web)
+
+    func uploadLabelPhoto(_ image: UIImage, for item: ScannedItem) async {
+        guard let api, let jpeg = image.resized(maxSide: 1600).jpegData(compressionQuality: 0.7) else { return }
+        do {
+            _ = try await api.uploadLabelPhoto(itemId: item.id, jpeg: jpeg)
+            banner = "Đã gửi ảnh label cho \(item.barcode)"
+        } catch {
+            banner = "Gửi ảnh label thất bại: \(error.localizedDescription)"
+        }
+        try? await Task.sleep(nanoseconds: 3_000_000_000)
+        banner = nil
     }
 
     // MARK: Ảnh hàng hỏng (tuỳ chọn, gắn vào kiện vừa gửi)

@@ -47,16 +47,23 @@ struct ScannedItem: Codable, Identifiable, Hashable {
     let customerGroup: String?
     let businessType: String?
     let exceptionStatus: String
+    let isNoName: Bool?
 }
 
 struct Pagination: Codable { let page: Int; let limit: Int; let total: Int; let totalPages: Int }
 struct ListResponse<T: Decodable>: Decodable { let data: [T]; let pagination: Pagination? }
 struct ObjectResponse<T: Decodable>: Decodable { let data: T }
 
+/// Kết quả một lần quét tracking:
+///  status = SUCCESS (tracking có thông tin -> ghi 1 kiện), TRACK (chưa có thông tin -> "ting", chờ mã tiếp theo), NO_NAME (quét END CODE -> kiện NO NAME)
 struct ScanData: Decodable {
-    let item: ScannedItem
-    let scannedCount: Int
-    let totalExpectedPackages: Int
+    let status: String?
+    let item: ScannedItem?
+    let seq: Int?
+    let needEndCode: Bool?
+    let barcode: String?
+    let scannedCount: Int?
+    let totalExpectedPackages: Int?
 }
 
 struct ScanFailData: Decodable { let status: String }
@@ -72,4 +79,5 @@ struct APIError: LocalizedError {
     var errorDescription: String? { message }
     var isDuplicate: Bool { code == "DUPLICATE_BARCODE" }
     var isNetwork: Bool { status == 0 }
+    var isEndCodeRequired: Bool { code == "END_CODE_REQUIRED" }
 }

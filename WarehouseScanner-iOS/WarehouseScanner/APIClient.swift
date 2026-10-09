@@ -74,9 +74,9 @@ struct APIClient {
     }
 
     /// Gửi MỘT lần cả mã vạch lẫn mã kho đọc được từ nhãn. Server tự khớp quy tắc để ra nhóm khách hàng/kho.
-    func scan(sessionId: Int, barcode: String, detectedText: String, altBarcodes: [String] = []) async throws -> ScanData {
-        var body: [String: Any] = ["barcode": barcode, "detected_text": detectedText]
-        if !altBarcodes.isEmpty { body["alt_barcodes"] = altBarcodes }   // các mã khác trên cùng tem: chỉ cần 1 mã có trong danh sách
+    /// Quét tuần tự từng tracking trên tem (hoặc QR "END CODE"); server trả SUCCESS / TRACK / NO_NAME.
+    func scan(sessionId: Int, barcode: String, detectedText: String) async throws -> ScanData {
+        let body: [String: Any] = ["barcode": barcode, "detected_text": detectedText]
         let r: ObjectResponse<ScanData> = try await perform("POST", "/api/v1/receiving/sessions/\(sessionId)/scan",
                                                             json: body, timeout: 3)
         return r.data
@@ -86,6 +86,13 @@ struct APIClient {
     func scanFail(sessionId: Int, detectedText: String) async throws {
         let _: ObjectResponse<ScanFailData> = try await perform("POST", "/api/v1/receiving/sessions/\(sessionId)/scan-fail",
                                                                 json: ["detected_text": detectedText], timeout: 5)
+    }
+
+    /// Gắn ảnh label vào kiện (nhân viên VN xem trên web để kiểm duyệt, không đổi trạng thái kiện).
+    func uploadLabelPhoto(itemId: FlexID, jpeg: Data) async throws -> PhotoData {
+        let r: ObjectResponse<PhotoData> = try await perform("POST", "/api/v1/scanned-items/\(itemId.value)/label-photo",
+                                                             raw: jpeg, contentType: "image/jpeg", timeout: 20)
+        return r.data
     }
 
     /// Gắn ảnh hàng hỏng vào kiện (server tự đánh dấu DAMAGED).

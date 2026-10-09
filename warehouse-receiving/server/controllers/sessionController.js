@@ -63,7 +63,9 @@ exports.getSession = asyncHandler(async (req, res) => {
   const session = s.rows[0];
 
   const items = await db.query(
-    `SELECT i.*, pr.tracking_code AS product_tracking, pr.alt_code AS product_alt, pr.alt_code2 AS product_alt2, COALESCE((SELECT json_agg(p.file_path ORDER BY p.id) FROM item_photos p WHERE p.item_id = i.id), '[]'::json) AS photo_urls
+    `SELECT i.*, pr.tracking_code AS product_tracking, pr.alt_code AS product_alt, pr.alt_code2 AS product_alt2, COALESCE((SELECT json_agg(p.file_path ORDER BY p.id) FROM item_photos p WHERE p.item_id = i.id), '[]'::json) AS photo_urls,
+            COALESCE((SELECT json_agg(p.file_path ORDER BY p.id) FROM item_photos p WHERE p.item_id = i.id AND p.kind = 'LABEL'), '[]'::json) AS label_photos,
+            COALESCE((SELECT json_agg(json_build_object('seq', l.seq, 'barcode', l.barcode, 'matched', l.product_id IS NOT NULL) ORDER BY l.seq, l.id) FROM label_scans l WHERE l.item_id = i.id), '[]'::json) AS tracks
        FROM scanned_items i LEFT JOIN products pr ON pr.id = i.product_id WHERE i.session_id = $1 ORDER BY i.scanned_at DESC, i.id DESC`, [id]);
 
   // Ma khac cua cung mat hang (tem co toi da 3 ma): cac ma trong danh sach khac voi ma da quet
@@ -76,10 +78,13 @@ exports.getSession = asyncHandler(async (req, res) => {
 
   const exceptionCounts = Object.fromEntries(EXCEPTION_KEYS.map((k) => [k, 0]));
   for (const it of items.rows) if (exceptionCounts[it.exception_status] !== undefined) exceptionCounts[it.exception_status] += 1;
+  exceptionCounts.NO_NAME = items.rows.filter((it) => it.is_no_name).length;   // tem 3 tracking deu khong co thong tin
   exceptionCounts.FAIL = session.fail_count;           // nhan khong doc duoc barcode (chi co ma kho)
   exceptionCounts.DUPLICATE = session.duplicate_count; // ma trung khong luu thanh dong, dem rieng tren phien
 
-  res.json({ data: { session, items: items.rows, exception_counts: exceptionCounts } });
+  // Cac tracking chua co thong tin cua tem dang quet do (cho tracking tiep theo / END CODE)
+  const pending = await db.query('SELECT seq, barcode FROM label_scans WHERE session_id = $1 AND item_id IS NULL ORDER BY seq, id', [id]);
+  res.json({ data: { session, items: items.rows, exception_counts: exceptionCounts, pending_tracks: pending.rows } });
 });
 
 // PATCH /api/v1/receiving/sessions/:id/finalize - "Chot kien": chot tong so kien du kien = so da quet

@@ -228,3 +228,27 @@ ALTER TABLE receiving_sessions ADD COLUMN IF NOT EXISTS last_scan_text      VARC
 ALTER TABLE receiving_sessions ADD COLUMN IF NOT EXISTS last_scan_group     VARCHAR(100);   -- nhom kho
 ALTER TABLE receiving_sessions ADD COLUMN IF NOT EXISTS last_scan_exception VARCHAR(20);    -- NORMAL | UNKNOWN (chi voi SUCCESS)
 ALTER TABLE receiving_sessions ADD COLUMN IF NOT EXISTS fail_count          INT NOT NULL DEFAULT 0;  -- so nhan khong doc duoc barcode
+
+-- CHE DO THU: bo rang buoc "moi ma chi quet 1 lan trong 1 phien" o muc CSDL; viec chan trung do code scanController quyet dinh
+-- (bien moi truong BLOCK_DUPLICATES=true de bat lai). Cac phien khac nhau luon duoc quet lai cung mot ma.
+ALTER TABLE scanned_items DROP CONSTRAINT IF EXISTS unique_barcode_per_session;
+CREATE INDEX IF NOT EXISTS idx_items_session_barcode ON scanned_items (session_id, barcode);
+
+-- 10. Quet tracking tuan tu tren mot tem (toi da 3 ma) + END CODE + anh label ------------------------
+-- label_scans: moi tracking da quet. item_id IS NULL = tracking chua co thong tin, dang cho quet tiep / END CODE.
+CREATE TABLE IF NOT EXISTS label_scans (
+  id            BIGSERIAL PRIMARY KEY,
+  session_id    INT NOT NULL REFERENCES receiving_sessions(id) ON DELETE CASCADE,
+  item_id       BIGINT REFERENCES scanned_items(id) ON DELETE SET NULL,
+  seq           SMALLINT NOT NULL,          -- 1..3: thu tu tracking tren tem
+  barcode       VARCHAR(100) NOT NULL,
+  product_id    BIGINT,                     -- co gia tri neu tracking nay co thong tin (khop Danh sach mat hang)
+  carrier       VARCHAR(30),
+  detected_text VARCHAR(100),
+  created_at    TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_label_scans_pending ON label_scans (session_id) WHERE item_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_label_scans_item ON label_scans (item_id);
+ALTER TABLE scanned_items ADD COLUMN IF NOT EXISTS is_no_name BOOLEAN NOT NULL DEFAULT FALSE;  -- ca 3 tracking deu khong co thong tin: lay tracking dau lam goc
+ALTER TABLE item_photos ADD COLUMN IF NOT EXISTS kind VARCHAR(10) NOT NULL DEFAULT 'DAMAGE';  -- DAMAGE | LABEL (anh label)
+ALTER TABLE receiving_sessions ALTER COLUMN last_scan_status TYPE VARCHAR(20);                  -- them TRACK, NO_NAME

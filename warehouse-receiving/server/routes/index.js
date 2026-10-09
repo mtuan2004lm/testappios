@@ -26,6 +26,7 @@ router.patch('/receiving/sessions/:id/close', sessions.closeSession);
 router.patch('/scanned-items/:id/toggle-business-type', items.toggleBusinessType);
 router.patch('/scanned-items/:id/exception', items.setException);
 // Anh tho (image/*) toi da 10MB
+router.post('/scanned-items/:id/label-photo', express.raw({ type: 'image/*', limit: '10mb' }), items.addLabelPhoto);
 router.post('/scanned-items/:id/damage-photo', express.raw({ type: 'image/*', limit: '10mb' }), items.addDamagePhoto);
 
 router.get('/tracking-codes', tracking.list);

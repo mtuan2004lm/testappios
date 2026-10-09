@@ -23,6 +23,12 @@ export const api = {
   listSessions: (params) => request('GET', `/receiving/sessions?${new URLSearchParams(params)}`),
   createSession: (body) => request('POST', '/receiving/sessions', body),
   getSession: (id) => request('GET', `/receiving/sessions/${id}`),
+  uploadLabelPhoto: async (itemId, file) => {
+    const res = await fetch(`/api/v1/scanned-items/${itemId}/label-photo`, { method: 'POST', headers: { 'Content-Type': file.type || 'image/jpeg' }, body: file });
+    const json = await res.json().catch(() => ({}));
+    if (!res.ok) throw new ApiError(res.status, json.error?.code, json.error?.message || 'Tải ảnh thất bại', json.data);
+    return json;
+  },
   scan: (id, body) => request('POST', `/receiving/sessions/${id}/scan`, body),
   updateExpected: (id, total_expected_packages) => request('PATCH', `/receiving/sessions/${id}`, { total_expected_packages }),
   finalize: (id) => request('PATCH', `/receiving/sessions/${id}/finalize`),

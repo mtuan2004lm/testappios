@@ -9,6 +9,7 @@ struct AutoScanView: View {
     @StateObject private var vm: AutoScanViewModel
     @State private var showPhoto = false
     @State private var photoTarget: ScannedItem?
+    @State private var photoIsLabel = false      // true: ảnh label · false: ảnh báo hỏng
     @State private var showHistory = false
 
     init(session: ReceivingSession) {
@@ -39,6 +40,24 @@ struct AutoScanView: View {
             }
             .padding(.top, 8)
 
+            // Pop-up chặn: đủ 3 tracking không có thông tin -> bắt buộc quét QR END CODE rồi mới quét tiếp
+            if vm.endRequired {
+                ZStack {
+                    Color.black.opacity(0.75).ignoresSafeArea()
+                    VStack(spacing: 12) {
+                        Image(systemName: "exclamationmark.triangle.fill").font(.system(size: 44)).foregroundStyle(.yellow)
+                        Text("BẮT BUỘC QUÉT QR END CODE").font(.title2.weight(.heavy)).multilineTextAlignment(.center)
+                        Text("Tem này đã quét đủ 3 tracking nhưng không có thông tin. Hãy quét mã QR END CODE trước khi quét tem khác.")
+                            .font(.subheadline).multilineTextAlignment(.center).opacity(0.9)
+                        Image(systemName: "qrcode.viewfinder").font(.system(size: 56)).opacity(0.9)
+                    }
+                    .foregroundStyle(.white).padding(24)
+                    .background(Color.dupRed.opacity(0.95), in: RoundedRectangle(cornerRadius: 20))
+                    .padding(.horizontal, 24)
+                }
+                .allowsHitTesting(false)      // camera vẫn quét được QR END CODE phía sau
+            }
+
             if camera.authorized == false { PermissionDenied() }
         }
         .navigationTitle(session.title)
@@ -54,7 +73,9 @@ struct AutoScanView: View {
         .fullScreenCover(isPresented: $showPhoto, onDismiss: { startScanning() }) {
             PhotoPicker(onImage: { img in
                 showPhoto = false
-                if let item = photoTarget { Task { await vm.uploadDamagePhoto(img, for: item) } }
+                if let item = photoTarget {
+                    Task { if photoIsLabel { await vm.uploadLabelPhoto(img, for: item) } else { await vm.uploadDamagePhoto(img, for: item) } }
+                }
             }, onCancel: { showPhoto = false })
             .ignoresSafeArea()
         }
@@ -103,7 +124,33 @@ struct AutoScanView: View {
                 }
             }
         } else if let r = vm.last {
-            if r.duplicate {
+            if let n = r.track {
+                // Tracking chưa có thông tin: "ting"
+                card(bg: Color.accent) {
+                    VStack(spacing: 4) {
+                        Text("TING").font(.system(size: 34, weight: .heavy))
+                        Text("Tracking \(n)/3 chưa có thông tin").font(.subheadline.bold())
+                        Text(r.barcode).font(.system(.footnote, design: .monospaced)).opacity(0.9)
+                        if let m = r.message { Text(m).font(.footnote).opacity(0.9).multilineTextAlignment(.center) }
+                    }
+                }
+            } else if r.noName {
+                card(bg: Color.purple) {
+                    VStack(spacing: 4) {
+                        Text("NO NAME").font(.system(size: 34, weight: .heavy))
+                        Text("Cả 3 tracking không có thông tin").font(.subheadline.bold())
+                        Text(r.barcode).font(.system(.footnote, design: .monospaced)).opacity(0.9)
+                        Text("Nên chụp ảnh label để nhân viên VN kiểm tra").font(.footnote).opacity(0.9)
+                    }
+                }
+            } else if r.endBlocked {
+                card(bg: Color.dupRed) {
+                    VStack(spacing: 4) {
+                        Text("QUÉT END CODE").font(.system(size: 30, weight: .heavy))
+                        Text(r.message ?? "Bắt buộc quét QR END CODE").font(.subheadline.bold()).multilineTextAlignment(.center)
+                    }
+                }
+            } else if r.duplicate {
                 // Quét lại nhãn đã quét trong phiên: MÃ TRÙNG (không phải FAIL)
                 card(bg: Color.accent) {
                     VStack(spacing: 4) {
@@ -147,7 +194,7 @@ struct AutoScanView: View {
                 }
             }
         } else {
-            Text("Đưa nhãn vào khung: thấy cả mã vạch và dòng mã kho")
+            Text("Quét lần lượt tracking trên tem (tối đa 3). Hết mã mà không có thông tin: quét QR END CODE")
                 .font(.subheadline.bold()).foregroundStyle(.white).multilineTextAlignment(.center)
                 .padding(.horizontal, 14).padding(.vertical, 8).background(.black.opacity(0.5), in: Capsule())
         }
@@ -184,12 +231,26 @@ struct AutoScanView: View {
             roundButton(camera.torchOn ? "flashlight.on.fill" : "flashlight.off.fill") { camera.toggleTorch() }
             Button {
                 photoTarget = vm.lastItem
+                photoIsLabel = true
                 camera.stop()                    // nhả camera trước khi mở màn chụp ảnh
                 showPhoto = true
             } label: {
-                Label(vm.lastItem.map { "Báo hỏng · \($0.barcode)" } ?? "Báo hỏng", systemImage: "camera.fill")
+                Label("Ảnh label", systemImage: "doc.viewfinder")
                     .font(.subheadline.bold()).lineLimit(1)
-                    .padding(.horizontal, 16).frame(height: 48)
+                    .padding(.horizontal, 14).frame(height: 48)
+                    .background(vm.lastItem == nil ? Color.gray.opacity(0.6) : Color.navy.opacity(0.9), in: Capsule())
+                    .foregroundStyle(.white)
+            }
+            .disabled(vm.lastItem == nil)
+            Button {
+                photoTarget = vm.lastItem
+                photoIsLabel = false
+                camera.stop()                    // nhả camera trước khi mở màn chụp ảnh
+                showPhoto = true
+            } label: {
+                Label("Hỏng", systemImage: "camera.fill")
+                    .font(.subheadline.bold()).lineLimit(1)
+                    .padding(.horizontal, 14).frame(height: 48)
                     .background(vm.lastItem == nil ? Color.gray.opacity(0.6) : Color.dupRed, in: Capsule())
                     .foregroundStyle(.white)
             }
