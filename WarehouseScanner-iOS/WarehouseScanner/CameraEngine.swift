@@ -1,6 +1,7 @@
 import AVFoundation
 import Vision
 import UIKit
+import CoreImage
 
 /// Camera chạy liên tục. Cùng một luồng hình cho cả hai việc:
 ///  - Đọc barcode bằng AVCaptureMetadataOutput (nhanh, chạy trên chip chuyên dụng)
@@ -28,6 +29,8 @@ final class CameraEngine: NSObject, ObservableObject,
     private var _ocrBusy = false
     private var _lastOCR = Date.distantPast
     private var _ocrCount = 0
+    private var _latest: CVPixelBuffer?                // khung hình mới nhất (để chụp ảnh label khi quét)
+    private static let ciContext = CIContext()
     var ocrEnabled: Bool {
         get { lock.lock(); defer { lock.unlock() }; return _ocrEnabled }
         set { lock.lock(); _ocrEnabled = newValue; lock.unlock() }
@@ -125,9 +128,27 @@ final class CameraEngine: NSObject, ObservableObject,
         if !codes.isEmpty { onBarcodes?(codes) }
     }
 
+    // MARK: Chụp ảnh label (khung hình camera ngay lúc quét)
+
+    /// JPEG của khung hình mới nhất (đã xoay đúng chiều, thu nhỏ cạnh dài ≤ 1280px). Chạy ở luồng nền.
+    func snapshot() async -> Data? {
+        await withCheckedContinuation { cont in
+            videoQueue.async { [weak self] in
+                guard let self else { cont.resume(returning: nil); return }
+                self.lock.lock(); let buf = self._latest; self.lock.unlock()
+                guard let buf else { cont.resume(returning: nil); return }
+                let ci = CIImage(cvPixelBuffer: buf).oriented(.right)      // camera sau ở chế độ dọc
+                guard let cg = Self.ciContext.createCGImage(ci, from: ci.extent) else { cont.resume(returning: nil); return }
+                let jpeg = UIImage(cgImage: cg).resized(maxSide: 1280).jpegData(compressionQuality: 0.6)
+                cont.resume(returning: jpeg)
+            }
+        }
+    }
+
     // MARK: OCR
 
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        if let buf = CMSampleBufferGetImageBuffer(sampleBuffer) { lock.lock(); _latest = buf; lock.unlock() }
         lock.lock()
         let allowed = _ocrEnabled && !_ocrBusy && Date().timeIntervalSince(_lastOCR) > 0.1
         var accurate = false

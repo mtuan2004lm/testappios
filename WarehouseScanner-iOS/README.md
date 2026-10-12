@@ -47,3 +47,11 @@ Cách B (thủ công): Xcode → New Project → iOS App (SwiftUI, tên `Warehou
 
 ## Lưu ý khi cập nhật
 Sau khi sửa code Swift: Xcode → **Run** lại để cài bản mới lên iPhone. Sau khi sửa server: `Ctrl+C` rồi `npm run dev` lại. Xem thêm lịch sử cập nhật trong `../warehouse-receiving/README.md`.
+
+## Tự chụp ảnh label (12/10/2026)
+
+Mỗi lần quét, app lưu khung hình camera (`CameraEngine.snapshot()`) và gửi lên kiện bằng `POST /scanned-items/:id/label-photo`. Bật/tắt bằng công tắc *Tự chụp ảnh label khi quét* trong ⚙️ (khóa `autoLabelShot`, mặc định bật). Ảnh của tracking chưa có thông tin được giữ (`pendingShots`, tối đa 4) rồi gắn vào kiện khi kiện được tạo.
+
+### Hàng đợi ảnh label (`PhotoOutbox.swift`)
+
+Ảnh chụp ngay khi thấy mã vạch (`shotByCode`), lưu ở `Documents/PhotoOutbox/<itemId>__<uuid>.jpg` và chỉ xóa khi server xác nhận. Tự thử lại mỗi 5 giây; gửi bù khi vào màn quét hoặc mở danh sách phiên. Màn quét hiện "N ảnh label đang chờ gửi".

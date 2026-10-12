@@ -49,6 +49,15 @@ final class AutoScanViewModel: ObservableObject {
 
     let session: ReceivingSession
     var api: APIClient?
+    /// Chụp khung hình camera ngay lúc quét (do AutoScanView gắn vào).
+    var snapshotProvider: (() async -> Data?)?
+    /// Tự chụp ảnh label cho từng lần quét (bật/tắt trong Cài đặt).
+    static let autoShotKey = "autoLabelShot"
+    private var autoShot: Bool { UserDefaults.standard.object(forKey: Self.autoShotKey) as? Bool ?? true }
+    private var pendingShots: [Data] = []                 // ảnh của các tracking chưa có thông tin (chưa có kiện để gắn)
+    private var shotByCode: [String: Task<Data?, Never>] = [:]   // ảnh chụp NGAY LÚC THẤY mã vạch (không đợi hết cửa sổ đọc / lúc gửi)
+    @Published var photosPending = 0                      // ảnh label đang chờ gửi (lưu trên ổ đĩa iPhone)
+    private var photoTask: Task<Void, Never>?
     var matcher = RuleMatcher(rules: [])
 
     /// Thời gian tối đa gom đủ barcode + mã kho cho một nhãn (mục tiêu ~2 giây).
@@ -119,6 +128,15 @@ final class AutoScanViewModel: ObservableObject {
             if let f = failCooldown[code], now.timeIntervalSince(f) < 8 { continue }   // vừa báo FAIL, đừng báo lặp
             if let t = cooldown[code], now.timeIntervalSince(t) < 1.5 { continue }
 
+            // Chụp khung hình ngay khi thấy mã vạch lần đầu (lúc này tem đang nằm trong khung, rõ nhất)
+            if autoShot, shotByCode[code] == nil {
+                let t = Task { await self.snapshotProvider?() }
+                shotByCode[code] = t
+                for other in barcodes {
+                    let o = other.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if !o.isEmpty, o != code, !Self.isEndCode(o), shotByCode[o] == nil { shotByCode[o] = t }   // cùng khung hình
+                }
+            }
             if pending == nil {
                 begin(Pending(barcode: code, warehouse: nil, start: now))
             } else if pending?.barcode == nil {
@@ -233,6 +251,11 @@ final class AutoScanViewModel: ObservableObject {
     /// mã kế tiếp theo thứ tự (tracking 2, 3); nếu đã "yes" hoặc NO NAME thì bỏ qua các mã còn lại (cùng một kiện).
     private func send(code: String, text: String, group: String, extras: [String] = []) async {
         guard let api else { return }
+        // Chụp khung hình ngay lúc quét (song song với việc gửi lên server)
+        // Dùng ảnh đã chụp lúc thấy mã; nếu chưa có (vd. QR END CODE) thì chụp ngay bây giờ
+        let shotTask: Task<Data?, Never>? = shotByCode[code] ?? (autoShot ? Task { await self.snapshotProvider?() } : nil)
+        var keepShot = false                  // mất mạng: giữ ảnh để lần gửi lại vẫn dùng đúng ảnh này
+        defer { if !keepShot { shotByCode[code] = nil } }
         do {
             let data = try await api.scan(sessionId: session.id, barcode: code, detectedText: text)
             if skippedAt[code] != nil { skippedAt[code] = nil; skipped = max(skipped - 1, 0) }
@@ -241,6 +264,7 @@ final class AutoScanViewModel: ObservableObject {
                 // Tracking chưa có thông tin: "ting", ghi lại, chờ tracking tiếp theo hoặc END CODE
                 let seq = data.seq ?? (pendingTracks + 1)
                 pendingTracks = seq
+                if let d = await shotTask?.value { pendingShots.append(d); if pendingShots.count > 4 { pendingShots.removeFirst() } }
                 let needEnd = data.needEndCode == true
                 if needEnd { endRequired = true }
                 let msg = needEnd ? "Đủ 3 tracking — quét QR END CODE" : "Tracking \(seq)/3 chưa có thông tin"
@@ -252,6 +276,11 @@ final class AutoScanViewModel: ObservableObject {
                 return
             }
             guard let item = data.item else { return }
+            // Gắn ảnh label: các tracking trước đó trên tem + khung hình của lần quét này
+            var shots = pendingShots
+            pendingShots = []
+            if let d = await shotTask?.value { shots.append(d) }
+            queuePhotos(shots, for: item)
             let noName = status == "NO_NAME"
             pendingTracks = 0
             endRequired = false
@@ -288,6 +317,7 @@ final class AutoScanViewModel: ObservableObject {
                 Haptics.warning()
                 AudioServicesPlaySystemSound(1053)
             } else if e.isNetwork {
+                keepShot = true
                 enqueue(code: code, text: text, group: group)
             } else {
                 done.remove(code)
@@ -296,6 +326,7 @@ final class AutoScanViewModel: ObservableObject {
                 last = LastResult(barcode: code, group: nil, warehouseText: text, message: e.message)
             }
         } catch {
+            keepShot = true
             enqueue(code: code, text: text, group: group)
         }
     }
@@ -319,6 +350,28 @@ final class AutoScanViewModel: ObservableObject {
     }
 
     // MARK: Ảnh label (gắn vào kiện vừa gửi; nhân viên VN kiểm duyệt trên web)
+
+    /// Lưu ảnh vào hàng đợi trên ổ đĩa rồi gửi; ảnh chỉ bị xóa sau khi server xác nhận nhận được (xem PhotoOutbox).
+    private func queuePhotos(_ shots: [Data], for item: ScannedItem) {
+        for jpeg in shots { PhotoOutbox.save(jpeg, itemId: item.id.value) }
+        photosPending = PhotoOutbox.count
+        startPhotoFlush()
+    }
+
+    /// Gửi các ảnh còn trong hàng đợi, thử lại mỗi 5 giây cho tới khi hết (cũng gửi bù ảnh của các lần quét trước).
+    func startPhotoFlush() {
+        guard photoTask == nil else { return }
+        photoTask = Task { [weak self] in
+            while !Task.isCancelled {
+                guard let self else { return }
+                guard let api = self.api else { self.photoTask = nil; return }
+                let left = await PhotoOutbox.flush(api: api)
+                self.photosPending = left
+                if left == 0 { self.photoTask = nil; return }
+                try? await Task.sleep(nanoseconds: 5_000_000_000)
+            }
+        }
+    }
 
     func uploadLabelPhoto(_ image: UIImage, for item: ScannedItem) async {
         guard let api, let jpeg = image.resized(maxSide: 1600).jpegData(compressionQuality: 0.7) else { return }

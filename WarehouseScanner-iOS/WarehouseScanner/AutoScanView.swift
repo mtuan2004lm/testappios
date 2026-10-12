@@ -31,6 +31,12 @@ struct AutoScanView: View {
                         .padding(.horizontal, 12).padding(.vertical, 6)
                         .background(Color.accent.opacity(0.9), in: Capsule())
                 }
+                if vm.photosPending > 0 {
+                    Label("\(vm.photosPending) ảnh label đang chờ gửi (đã lưu trên máy, tự gửi lại)", systemImage: "photo.on.rectangle.angled")
+                        .font(.footnote.bold()).foregroundStyle(.white)
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background(Color.black.opacity(0.6), in: Capsule())
+                }
                 if let b = vm.banner {
                     Text(b).font(.footnote.bold()).padding(8).background(.ultraThinMaterial, in: Capsule())
                 }
@@ -85,6 +91,9 @@ struct AutoScanView: View {
     private func startScanning() {
         vm.api = store.api
         vm.matcher = store.matcher
+        vm.snapshotProvider = { [camera] in await camera.snapshot() }
+        vm.photosPending = PhotoOutbox.count
+        if vm.photosPending > 0 { vm.startPhotoFlush() }       // gửi bù ảnh còn sót từ lần quét trước
         camera.ocrEnabled = true                 // đọc cả mã vạch lẫn chữ mã kho trên cùng khung hình
         camera.onBarcodes = { codes in Task { @MainActor in vm.handle(barcodes: codes) } }
         camera.onTextLines = { lines in Task { @MainActor in vm.handle(lines: lines) } }

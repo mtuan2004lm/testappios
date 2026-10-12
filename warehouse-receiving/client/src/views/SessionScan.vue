@@ -41,16 +41,21 @@ function applyAppEvent(sess) {
   last.value = null;                                              // nhuong khung cho ket qua tu app
   appEvent.value = { status: sess.last_scan_status, barcode: sess.last_scan_barcode, text: sess.last_scan_text,
                      seq: sess.last_scan_status === 'TRACK' ? sess.last_scan_exception : null,
-                     group: sess.last_scan_group, business: items.value.find((i) => i.barcode === sess.last_scan_barcode)?.business_type || null, unknown: sess.last_scan_exception === 'UNKNOWN', notFound: sess.last_scan_exception === 'NOT_FOUND' };
+                     group: sess.last_scan_group, business: items.value.find((i) => i.barcode === sess.last_scan_barcode)?.business_type || null, blockReason: (sess.last_scan_status === 'SUCCESS' || sess.last_scan_status === 'NO_NAME') ? sess.last_scan_block : null, unknown: sess.last_scan_exception === 'UNKNOWN', notFound: sess.last_scan_exception === 'NOT_FOUND' };
   clearTimeout(appTimer);
   appTimer = setTimeout(() => { appEvent.value = null; }, 8000);
   const st = appEvent.value.status;
-  if (st === 'SUCCESS') yes(); else if (st === 'TRACK' || st === 'NO_NAME') ting(); else beep(220, 300);   // FAIL / MÃ TRÙNG: tiếng trầm
+  if (appEvent.value.blockReason) warn();
+  else if (st === 'SUCCESS') yes(); else if (st === 'TRACK' || st === 'NO_NAME') ting(); else beep(220, 300);   // FAIL / MÃ TRÙNG: tiếng trầm
 }
 
+const BLOCK_LABELS = { DAMAGED: 'Rách / móp / ướt / bẹp / vỡ seal / rò rỉ', RETURN: 'Trả hàng', STORED_PENDING: 'Lưu kho – chờ xác nhận gửi', QTY_VERIFY: 'Kiểm tra số lượng sản phẩm', PHOTO_VIDEO: 'Chụp ảnh và quay video', CUSTOMS_SPLIT: 'Tách kiện để kiểm hải quan', REPACK: 'Đóng gói lại / gia cố', PRODUCT_INSPECT: 'Kiểm tra sản phẩm (model, màu, size…)' };
+const blockLabel = (c) => BLOCK_LABELS[c] || c;
+const warn = () => { beep(260, 160); setTimeout(() => beep(260, 160), 220); };   // tieng canh bao BLOCK
 const businessLabel = (t) => (t === 'KINH_DOANH' ? 'Kinh doanh' : t === 'KHONG_KINH_DOANH' ? 'Không kinh doanh' : '—');
 
 const isOpen = computed(() => session.value?.status === 'OPEN');
+const missingLabel = computed(() => items.value.filter((i) => !(i.label_photos || []).length).length);
 const filtered = computed(() => {
   const q = search.value.trim().toLowerCase();
   return q ? items.value.filter((i) => i.barcode.toLowerCase().includes(q) || (i.customer_group || '').toLowerCase().includes(q) || (i.detected_warehouse_code || '').toLowerCase().includes(q)) : items.value;
@@ -97,7 +102,9 @@ function beep(freq, ms = 120) {
 // "yes" = 2 tieng cao tang dan; "ting" = 1 tieng cao ngan
 const yes = () => { beep(660, 110); setTimeout(() => beep(990, 160), 130); };
 const ting = () => beep(1500, 90);
-const focusInput = () => nextTick(() => scanInput.value?.focus());
+const focusInput = () => nextTick(() => scanInput.value?.focus({ preventScroll: true }));   // preventScroll: không cuộn trang về đầu khi lấy lại focus
+// Ô quét tự lấy lại focus khi mất focus, trừ khi người dùng vừa bấm vào link/nút/ô nhập khác (nếu không, bấm link "Label" sẽ bị cuộn về đầu trang và không mở được ảnh)
+const refocusUnlessInteractive = (e) => { if (e?.relatedTarget?.closest?.('a, button, select, input, textarea, label')) return; if (isOpen.value && !busy.value && !editingTotal.value && !camOpen.value) focusInput(); };
 
 async function submitScan() {
   const barcode = code.value.trim();
@@ -118,7 +125,10 @@ async function submitScan() {
     session.value.scanned_count = data.scanned_count;
     pendingTracks.value = [];
     endBlock.value = false;
-    if (data.status === 'NO_NAME') {
+    if (data.blocked) {
+      last.value = { kind: 'blocked', item: data.item, reason: data.block_reason_label, count: data.blocks?.length || 1, noName: data.status === 'NO_NAME' };
+      warn();
+    } else if (data.status === 'NO_NAME') {
       last.value = { kind: 'noname', item: data.item, message: data.warning };
       ting();
     } else if (data.item.exception_status === 'UNKNOWN' || !data.item.customer_group) {
@@ -286,7 +296,7 @@ onMounted(async () => {
             <input ref="scanInput" v-model="code" :disabled="!isOpen || busy" autofocus autocomplete="off" spellcheck="false"
               placeholder="Quét hoặc gõ mã rồi Enter" maxlength="100"
               class="w-full rounded-xl border-2 border-slate-300 py-4 pl-12 pr-14 font-mono text-lg outline-none focus:border-accent focus:ring-4 focus:ring-accent/20 disabled:bg-slate-100"
-              @keydown.enter.prevent="submitScan" @blur="isOpen && !busy && !editingTotal && !camOpen && focusInput()" />
+              @keydown.enter.prevent="submitScan" @blur="refocusUnlessInteractive($event)" />
             <button type="button" class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-accent" :title="sound ? 'Tắt âm' : 'Bật âm'" @click="sound = !sound; focusInput()">
               <Volume2 v-if="sound" class="h-6 w-6" /><VolumeX v-else class="h-6 w-6" />
             </button>
@@ -339,13 +349,21 @@ onMounted(async () => {
           <!-- Man hinh trang thai -->
           <div class="w-full flex-1 rounded-xl p-4 text-center sm:max-w-sm"
             :class="{
-              'bg-white/10': !last && !appEvent, 'bg-emerald-500': last?.kind === 'ok' || (!last && appEvent?.status === 'SUCCESS'),
+              'bg-white/10': !last && !appEvent, 'bg-emerald-500': last?.kind === 'ok' || (!last && !appEvent?.blockReason && appEvent?.status === 'SUCCESS'),
               'bg-accent': last?.kind === 'business',
               'bg-slate-500': last?.kind === 'unknown',
               'bg-amber-500': last?.kind === 'track' || (!last && appEvent?.status === 'TRACK'),
-              'bg-fuchsia-600': last?.kind === 'noname' || (!last && appEvent?.status === 'NO_NAME'),
-              'bg-red-600': last?.kind === 'duplicate' || last?.kind === 'error' || (!last && (appEvent?.status === 'FAIL' || appEvent?.status === 'DUPLICATE')) }">
-            <template v-if="!last && appEvent && (appEvent.status === 'TRACK' || appEvent.status === 'NO_NAME')">
+              'bg-fuchsia-600': last?.kind === 'noname' || (!last && !appEvent?.blockReason && appEvent?.status === 'NO_NAME'),
+              'bg-red-700': last?.kind === 'blocked' || (!last && !!appEvent?.blockReason),
+              'bg-red-600': last?.kind === 'duplicate' || last?.kind === 'error' || (!last && !appEvent?.blockReason && (appEvent?.status === 'FAIL' || appEvent?.status === 'DUPLICATE')) }">
+            <template v-if="last?.kind === 'blocked' || (!last && appEvent?.blockReason)">
+              <ShieldBan class="mx-auto h-7 w-7" />
+              <div class="text-3xl font-extrabold tracking-widest">BLOCK</div>
+              <div class="break-all font-mono text-lg font-bold">{{ last ? last.item.barcode : appEvent.barcode }}</div>
+              <div class="text-sm font-bold">{{ last ? last.reason : blockLabel(appEvent.blockReason) }}</div>
+              <div class="text-xs opacity-90">Khách yêu cầu block — kiện vẫn được ghi nhận{{ last?.count > 1 ? ` (+${last.count - 1} block khác)` : '' }}<template v-if="last?.noName || appEvent?.status === 'NO_NAME'"> · NO NAME</template></div>
+            </template>
+            <template v-else-if="!last && appEvent && (appEvent.status === 'TRACK' || appEvent.status === 'NO_NAME')">
               <Tag class="mx-auto h-7 w-7" />
               <div class="text-3xl font-extrabold tracking-widest">{{ appEvent.status === 'TRACK' ? 'TING' : 'NO NAME' }}</div>
               <div class="break-all font-mono text-lg font-bold">{{ appEvent.barcode }}</div>
@@ -390,7 +408,7 @@ onMounted(async () => {
             </template>
             <template v-else-if="last.kind === 'duplicate' || last.kind === 'error'">
               <component :is="last.kind === 'duplicate' ? Repeat2 : AlertTriangle" class="mx-auto h-7 w-7" />
-              <div class="text-xl font-extrabold">{{ last.kind === 'duplicate' ? 'MÃ TRÙNG' : (last.title || 'LỖI') }}</div>
+              <div class="text-xl font-extrabold">{{ last.kind === 'blocked' ? `BLOCK – ${last.reason}` : last.kind === 'duplicate' ? 'MÃ TRÙNG' : (last.title || 'LỖI') }}</div>
               <div class="break-all font-mono text-lg font-bold">{{ last.barcode }}</div>
               <div class="text-xs opacity-90">{{ last.message }}</div>
             </template>
@@ -413,7 +431,7 @@ onMounted(async () => {
         <!-- Lich su quet -->
         <!-- Lich su quet -->
         <div class="card overflow-hidden">
-          <div class="border-b border-slate-100 px-5 py-3 text-sm font-bold uppercase tracking-wide text-slate-500">Lịch sử quét ({{ filtered.length }})</div>
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-slate-100 px-5 py-3 text-sm font-bold uppercase tracking-wide text-slate-500">Lịch sử quét ({{ filtered.length }})<span v-if="missingLabel" class="rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-bold normal-case tracking-normal text-red-700" title="Kiện chưa có ảnh label — bấm 'Ảnh label' ở dòng đó để bổ sung">⚠ {{ missingLabel }} kiện thiếu ảnh label</span></div>
           <div>
             <table class="w-full table-fixed text-left text-sm">
               <colgroup><col class="w-[62px]" /><col /><col class="w-[132px]" /><col class="w-[150px]" /></colgroup>
@@ -425,6 +443,8 @@ onMounted(async () => {
                 <tr v-for="i in filtered" :key="i.id" class="align-top">
                   <td class="px-3 py-2 text-xs text-slate-500">{{ fmtTime(i.scanned_at) }}</td>
                   <td class="break-all px-3 py-2 font-mono text-xs font-semibold">{{ i.barcode }}<span v-if="i.detected_carrier" class="ml-2 whitespace-nowrap rounded bg-slate-100 px-1.5 py-0.5 font-sans text-[10px] font-bold text-slate-600">{{ i.detected_carrier }}</span>
+                    <span v-if="i.block_reason" class="ml-2 whitespace-nowrap rounded px-1.5 py-0.5 font-sans text-[10px] font-bold" :class="i.block_status === 'ACTIVE' ? 'bg-red-100 text-red-700' : 'bg-slate-100 text-slate-500 line-through'" :title="blockLabel(i.block_reason)">BLOCK</span>
+                    <div v-if="i.block_reason" class="mt-0.5 font-sans text-[11px] font-semibold" :class="i.block_status === 'ACTIVE' ? 'text-red-600' : 'text-slate-400'">Block: {{ blockLabel(i.block_reason) }}<span v-if="i.block_status !== 'ACTIVE'"> (đã gỡ)</span></div>
                     <span v-if="i.is_no_name" class="ml-2 whitespace-nowrap rounded bg-fuchsia-100 px-1.5 py-0.5 font-sans text-[10px] font-bold text-fuchsia-700">NO NAME</span>
                     <div v-if="i.is_no_name && i.tracks?.length > 1" class="mt-0.5 font-sans text-[11px] font-normal text-slate-500">Tracking trên tem: {{ i.tracks.map((t) => t.barcode).join(' · ') }}</div>
                     <div v-if="i.other_codes?.length" class="mt-0.5 font-sans text-[11px] font-normal text-slate-500">Mã tracking khác: {{ i.other_codes.join(', ') }}</div></td>
@@ -441,6 +461,7 @@ onMounted(async () => {
                     <div class="flex flex-wrap items-center gap-x-2 gap-y-1">
                       <a v-for="(u, k) in damagePhotos(i)" :key="u" :href="u" target="_blank" class="inline-flex items-center gap-0.5 text-xs font-semibold text-accent-dark hover:underline"><Camera class="h-3.5 w-3.5" />Ảnh{{ damagePhotos(i).length > 1 ? k + 1 : '' }}</a>
                       <a v-for="(u, k) in i.label_photos" :key="u" :href="u" target="_blank" class="inline-flex items-center gap-0.5 text-xs font-semibold text-sky-700 hover:underline"><Tag class="h-3.5 w-3.5" />Label{{ i.label_photos.length > 1 ? k + 1 : '' }}</a>
+                      <span v-if="!(i.label_photos || []).length" class="whitespace-nowrap text-xs font-bold text-red-600">⚠ Thiếu ảnh label</span>
                       <label class="inline-flex cursor-pointer items-center gap-0.5 text-xs font-semibold text-slate-500 hover:text-navy" title="Chụp / tải ảnh label của kiện này">
                         <ImagePlus class="h-3.5 w-3.5" />Ảnh label
                         <input type="file" accept="image/*" capture="environment" class="hidden" @change="uploadLabel(i, $event)" />
@@ -483,7 +504,7 @@ onMounted(async () => {
         </div>
         <p v-if="camError" class="text-sm text-red-500">{{ camError }}</p>
         <div v-if="last" class="rounded-lg px-3 py-2 text-center text-sm font-semibold text-white"
-          :class="{ 'bg-emerald-500': last.kind === 'ok', 'bg-accent': last.kind === 'business', 'bg-slate-500': last.kind === 'unknown', 'bg-amber-500': last.kind === 'track', 'bg-fuchsia-600': last.kind === 'noname', 'bg-red-600': last.kind === 'duplicate' || last.kind === 'error' }">
+          :class="{ 'bg-emerald-500': last.kind === 'ok', 'bg-accent': last.kind === 'business', 'bg-slate-500': last.kind === 'unknown', 'bg-amber-500': last.kind === 'track', 'bg-fuchsia-600': last.kind === 'noname', 'bg-red-700': last.kind === 'blocked', 'bg-red-600': last.kind === 'duplicate' || last.kind === 'error' }">
           {{ last.kind === 'duplicate' ? 'MÃ TRÙNG' : last.kind === 'error' ? (last.title || 'LỖI') : last.kind === 'track' ? `TING ${last.seq}/3` : last.kind === 'noname' ? 'NO NAME' : (last.item.customer_group || 'KHÔNG XÁC ĐỊNH') }} · <span class="font-mono">{{ last.item?.barcode || last.barcode }}</span>
         </div>
         <p class="text-xs text-slate-500">Đưa barcode vào giữa khung, giữ cách camera khoảng 15–25 cm. Quét xong mã nào sẽ tự ghi vào phiên, cứ đưa mã tiếp theo vào.</p>

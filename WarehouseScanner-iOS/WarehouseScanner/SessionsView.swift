@@ -40,7 +40,7 @@ struct SessionsView: View {
             ToolbarItem(placement: .topBarTrailing) { Button { Task { await load() } } label: { Image(systemName: "arrow.clockwise") } }
         }
         .sheet(isPresented: $showSettings) { NavigationStack { SettingsView() } }
-        .task { await store.refresh(); await load() }
+        .task { await store.refresh(); await load(); _ = await PhotoOutbox.flush(api: store.api) }   // gửi bù ảnh label còn sót
         .refreshable { await load() }
     }
 

@@ -4,6 +4,7 @@ struct SettingsView: View {
     @EnvironmentObject var store: AppStore
     @Environment(\.dismiss) private var dismiss
     @State private var testing = false
+    @AppStorage(AutoScanViewModel.autoShotKey) private var autoShot = true
 
     var body: some View {
         Form {
@@ -24,6 +25,10 @@ struct SettingsView: View {
                 }
             } header: { Text("Địa chỉ server (web Warehouse Tina)") }
               footer: { Text("Điện thoại và máy chạy server phải cùng Wi-Fi. Dùng địa chỉ IP của máy tính (terminal server in ra dòng \"Dien thoai dung dia chi\"), không dùng localhost.") }
+
+            Section {
+                Toggle("Tự chụp ảnh label khi quét", isOn: $autoShot)
+            } footer: { Text("Mỗi lần quét, app lưu khung hình camera và gửi lên kiện (hiện ở mục Ảnh label trên web để nhân viên VN kiểm tra).") }
 
             Section { LabeledContent("Bản app", value: AppStore.buildTag) }
 
