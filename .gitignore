@@ -5,3 +5,7 @@ dist/
 uploads/
 xcuserdata/
 DerivedData/
+
+# Bản sao lưu tạm
+*.bak
+_backup_*/
