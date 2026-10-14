@@ -46,6 +46,8 @@ final class AutoScanViewModel: ObservableObject {
     @Published var banner: String?
     @Published var pendingTracks = 0          // số tracking chưa có thông tin của tem đang quét (0...3)
     @Published var endRequired = false        // true: bắt buộc quét QR END CODE (pop-up chặn)
+    @Published var hint: String?              // lý do app đang im lặng (vd. tem đã quét rồi) để không tưởng app hỏng
+    private var hintTask: Task<Void, Never>?
 
     let session: ReceivingSession
     var api: APIClient?
@@ -61,7 +63,7 @@ final class AutoScanViewModel: ObservableObject {
     var matcher = RuleMatcher(rules: [])
 
     /// Thời gian tối đa gom đủ barcode + mã kho cho một nhãn (mục tiêu ~2 giây).
-    let window: TimeInterval = 1.5
+    let window: TimeInterval = 1.0
 
     private struct Pending {
         var barcode: String?
@@ -100,8 +102,23 @@ final class AutoScanViewModel: ObservableObject {
         return n == "ENDCODE"
     }
 
+    private func showHint(_ text: String) {
+        guard hint == nil else { return }
+        hint = text
+        hintTask?.cancel()
+        hintTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_800_000_000)
+            if !Task.isCancelled { self?.hint = nil }
+        }
+    }
+
     func handle(barcodes: [String]) {
         let now = Date()
+        // Trong khung có tem MỚI (chưa gửi) không? Nếu có thì tem cũ còn sót một phần không được nuốt chữ mã kho của tem mới
+        let hasNew = barcodes.contains { raw in
+            let c = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            return !c.isEmpty && !Self.isEndCode(c) && !done.contains(c)
+        }
         for raw in barcodes {
             let code = raw.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !code.isEmpty else { continue }
@@ -116,16 +133,20 @@ final class AutoScanViewModel: ObservableObject {
             lastSeen[code] = now
             if done.contains(code) {
                 // Nhãn đã gửi rồi. Nếu nó vẫn nằm trong khung thì im lặng; nếu đã rời khung rồi quét lại -> MÃ TRÙNG (không phải FAIL)
-                suppressTextUntil = now.addingTimeInterval(2)
-                if pending != nil, pending?.barcode == nil { clearPending() }      // chữ mã kho của nhãn này, không phải nhãn mới
-                if let p = prevSeen, now.timeIntervalSince(p) > 1.5,
+                if !hasNew {
+                    suppressTextUntil = now.addingTimeInterval(2)
+                    if pending != nil, pending?.barcode == nil { clearPending() }      // chữ mã kho của nhãn này, không phải nhãn mới
+                }
+                if let p = prevSeen, now.timeIntervalSince(p) > 0.7,
                    lastDupAt[code].map({ now.timeIntervalSince($0) > 4 }) ?? true {
                     lastDupAt[code] = now
                     Task { await send(code: code, text: code, group: "") }          // server trả 409 -> hiện MÃ TRÙNG, web tăng bộ đếm
+                } else if !hasNew {
+                    showHint("Tem này đã quét rồi — đưa ra khỏi khung rồi đưa lại để báo trùng")
                 }
                 continue
             }
-            if let f = failCooldown[code], now.timeIntervalSince(f) < 8 { continue }   // vừa báo FAIL, đừng báo lặp
+            if let f = failCooldown[code], now.timeIntervalSince(f) < 8 { showHint("Tem này vừa báo lỗi — đợi vài giây rồi đưa lại"); continue }   // vừa báo FAIL, đừng báo lặp
             if let t = cooldown[code], now.timeIntervalSince(t) < 1.5 { continue }
 
             // Chụp khung hình ngay khi thấy mã vạch lần đầu (lúc này tem đang nằm trong khung, rõ nhất)
@@ -137,6 +158,7 @@ final class AutoScanViewModel: ObservableObject {
                     if !o.isEmpty, o != code, !Self.isEndCode(o), shotByCode[o] == nil { shotByCode[o] = t }   // cùng khung hình
                 }
             }
+            suppressTextUntil = .distantPast      // tem mới vào khung: chữ mã kho của nó không được bị chặn
             if pending == nil {
                 begin(Pending(barcode: code, warehouse: nil, start: now))
             } else if pending?.barcode == nil {
@@ -156,7 +178,7 @@ final class AutoScanViewModel: ObservableObject {
                 pending = p
             }
             // Mã kho có thể đã đọc được vài khung hình trước khi thấy mã vạch
-            if pending?.warehouse == nil, let r = recentMatch, now.timeIntervalSince(r.at) < 1.5 {
+            if pending?.warehouse == nil, let r = recentMatch, now.timeIntervalSince(r.at) < 1.0 {
                 pending?.warehouse = (text: r.text, group: r.group)
             }
             tryComplete()
@@ -190,7 +212,7 @@ final class AutoScanViewModel: ObservableObject {
         let start = p.start
         timerTask = Task { [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 100_000_000)
+                try? await Task.sleep(nanoseconds: 50_000_000)
                 guard let self else { return }
                 let elapsed = Date().timeIntervalSince(start)
                 self.progress = min(elapsed / self.window, 1)

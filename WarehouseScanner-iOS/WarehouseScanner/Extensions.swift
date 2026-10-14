@@ -18,18 +18,24 @@ extension UIImage {
 struct Reticle: View {
     var active = false
     var progress: Double = 0
+    /// Khung hướng dẫn chỉ để căn nhãn; camera đọc TOÀN BỘ khung hình, không chỉ trong khung này.
+    /// Rộng gần hết màn hình (trước đây cố định 320x200) để đặt vừa cả mã vạch lẫn dòng mã kho.
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: 20)
-                .stroke(active ? Color.accent : Color.white.opacity(0.7), style: StrokeStyle(lineWidth: 3, dash: [18, 10]))
-                .frame(width: 320, height: 200)
-            if active {
+        GeometryReader { geo in
+            let w = max(geo.size.width - 24, 200)
+            let h = min(w * 0.8, geo.size.height * 0.55)
+            ZStack {
                 RoundedRectangle(cornerRadius: 20)
-                    .trim(from: 0, to: progress)
-                    .stroke(Color.accent, style: StrokeStyle(lineWidth: 5, lineCap: .round))
-                    .frame(width: 320, height: 200)
-                    .animation(.linear(duration: 0.1), value: progress)
+                    .stroke(active ? Color.accent : Color.white.opacity(0.7), style: StrokeStyle(lineWidth: 3, dash: [18, 10]))
+                if active {
+                    RoundedRectangle(cornerRadius: 20)
+                        .trim(from: 0, to: progress)
+                        .stroke(Color.accent, style: StrokeStyle(lineWidth: 5, lineCap: .round))
+                        .animation(.linear(duration: 0.1), value: progress)
+                }
             }
+            .frame(width: w, height: h)
+            .position(x: geo.size.width / 2, y: geo.size.height / 2)
         }
     }
 }

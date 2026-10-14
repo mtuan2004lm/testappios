@@ -7,6 +7,18 @@ server/   API Express (config/, controllers/, routes/, utils/, scripts/, schema.
 client/   Vue 3 SPA (src/views/: SessionList, SessionScan, ItemsList, TrackingCodes)
 ```
 
+## Công nghệ sử dụng
+
+| Phần | Công nghệ |
+|---|---|
+| Database | **PostgreSQL** (`server/schema.sql`, chạy `npm run db:init`); cột tự sinh + index để so khớp mã tracking nhanh |
+| Server (API) | **Node.js 22**, **Express 4**, `pg` (nối PostgreSQL), `cors`, `dotenv`; ảnh lưu thành file trong `server/uploads` |
+| Web | **Vue 3** (Composition API, `<script setup>`), **Vue Router 4**, **Vite 5**, **Tailwind CSS 3**, `lucide-vue-next` (biểu tượng), `@zxing/browser` (quét barcode bằng camera web), `jsbarcode` (vẽ mã vạch) |
+| App iPhone | **Swift + SwiftUI**, **AVFoundation** (camera, đọc barcode/QR), **Vision** (OCR mã kho trên tem), **XcodeGen** (`project.yml` sinh project Xcode) |
+| Công cụ | **Playwright** (kiểm tra giao diện web), **draw.io** (`Database_He_thong_nhan_hang.drawio`) |
+
+Cách nối: iPhone và web đều gọi API qua HTTP; API đọc ghi PostgreSQL. Web hỏi server mỗi 1 giây để hiện trạng thái app vừa gửi. Khi chạy thử, Vite chuyển tiếp `/api` và `/uploads` sang server (cổng 3000).
+
 ## Các màn hình web
 
 | Tab | Đường dẫn | Chức năng |
@@ -246,3 +258,8 @@ Xem `../WarehouseScanner-iOS/README.md`. Tóm tắt: iPhone chỉ làm máy qué
 - **Chế độ thử (đang bật): cho quét lại cùng một mã nhiều lần** (để test với vài mã mẫu): tắt việc chặn MÃ TRÙNG trong cùng phiên và bỏ ràng buộc `unique_barcode_per_session` (chạy `npm run db:init`). Bật lại quy tắc cũ: chạy server với `BLOCK_DUPLICATES=true` (hằng `BLOCK_DUPLICATES` ở đầu `server/controllers/scanController.js`). Lưu ý: giữa các phiên khác nhau thì luôn quét lại được cùng một mã, chỉ chặn trùng trong cùng một phiên.
 - **App iPhone tự chụp ảnh label khi quét** (12/10/2026): mỗi lần quét một mã, app lưu khung hình camera và gửi lên kiện thành *Ảnh label* (hiện trên web để nhân viên VN kiểm tra). Ảnh của các tracking chưa có thông tin được giữ lại và gắn vào kiện khi kiện được tạo. Có công tắc **Tự chụp ảnh label khi quét** trong ⚙️ Cài đặt (mặc định bật). Không đổi server/web; cần build lại app trong Xcode. Mất mạng lúc quét thì ảnh của lần đó không được gửi.
 - **Sửa lỗi ảnh label thiếu** (12/10/2026): app iPhone chụp ảnh ngay khi thấy mã vạch, lưu ảnh trên ổ đĩa (`PhotoOutbox`) và tự gửi lại đến khi server nhận (không mất ảnh khi mất mạng/thoát app). Web hiện cảnh báo đỏ *⚠ N kiện thiếu ảnh label* và dòng *⚠ Thiếu ảnh label* ở kiện chưa có ảnh. Bấm link *Label*/*Ảnh* không còn bị cuộn về đầu trang. Cần build lại app (thêm `PhotoOutbox.swift` vào target) và tải lại web.
+- **Kiện NO NAME = ngoại lệ "Không xác định"** (14/10/2026): kiện NO NAME mới tự có ngoại lệ Không xác định; phiên cũ chạy `npm run db:fix-noname`. Cần khởi động lại server.
+- **Thẻ SUCCESS không còn hiện tracking ở dòng Mã kho** (14/10/2026): `last_scan_text` chỉ lấy mã kho thật đã lưu. Cần khởi động lại server.
+- **Quy tắc mã kho FADO.VN nhận "FD VAT HUE"** (14/10/2026): quy tắc cũ viết dính (FDVAT HUE) nên không khớp nhãn thật. Chạy `npm run db:fix-rules` (chỉ sửa khi còn là bản mặc định, chạy lại an toàn), rồi mở lại app iPhone để tải quy tắc mới.
+- **Sửa lỗi tracking bị lưu thành Mã kho** (12/10/2026): mã vạch USPS có ký tự ẩn (GS); server nay lọc ký tự này cho cả barcode lẫn mã kho, và không coi chuỗi trùng tracking (kể cả Tracking / Mã khác của mặt hàng) là mã kho. File sửa: `server/controllers/scanController.js`, `server/scripts/recompute-items.js`. Dọn dữ liệu cũ: `npm run db:recompute -- --clear-only` (chỉ xóa mã kho là tracking, không đụng nhóm KH / loại hình). Cần khởi động lại server. Kiện quét bằng web vẫn không có Nhóm KH / Mã kho vì web không đọc được chữ trên tem (chỉ app iPhone dùng OCR).
+- **Thêm mục "Công nghệ sử dụng"** (13/10/2026) vào README: liệt kê công nghệ của database, server, web, app iPhone và công cụ. Chỉ sửa tài liệu.

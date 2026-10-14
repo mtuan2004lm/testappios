@@ -2,7 +2,7 @@
 
 App Swift/SwiftUI (iOS 16+) dùng camera iPhone **thay máy quét barcode**. Phiên nhận hàng được tạo trên web; app chỉ chọn phiên đang mở rồi quét, mọi dữ liệu gửi về web qua API:
 
-**Một màn hình quét duy nhất, tự động:** đưa nhãn vào khung *một lần*, app lấy cùng lúc **mã vạch** và **dòng mã kho in trên nhãn** (OCR), tự khớp quy tắc của web rồi gửi `POST /receiving/sessions/:id/scan` (kèm `barcode` + `detected_text`). Không hỏi xác nhận; nhãn nào không đọc đủ cả hai trong ~2 giây thì bỏ qua và quét nhãn kế tiếp. Màn hình chỉ hiển thị nhãn **thuộc kho nào** (không phân loại kinh doanh). Mất mạng thì tự giữ lại và gửi lại mỗi 4 giây. Nút **Báo hỏng** (tuỳ chọn) chụp ảnh gắn vào kiện vừa gửi.
+**Một màn hình quét duy nhất, tự động:** đưa nhãn vào khung *một lần*, app lấy cùng lúc **mã vạch** và **dòng mã kho in trên nhãn** (OCR), tự khớp quy tắc của web rồi gửi `POST /receiving/sessions/:id/scan` (kèm `barcode` + `detected_text`). Không hỏi xác nhận; nhãn nào không đọc đủ cả hai trong ~1 giây thì bỏ qua và quét nhãn kế tiếp. Màn hình chỉ hiển thị nhãn **thuộc kho nào** (không phân loại kinh doanh). Mất mạng thì tự giữ lại và gửi lại mỗi 4 giây. Nút **Báo hỏng** (tuỳ chọn) chụp ảnh gắn vào kiện vừa gửi.
 
 ## 1. Chạy server (máy tính)
 ```bash
@@ -34,8 +34,8 @@ Cách B (thủ công): Xcode → New Project → iOS App (SwiftUI, tên `Warehou
 ## Cấu trúc code
 | File | Việc |
 |---|---|
-| `CameraEngine.swift` | Camera liên tục: barcode (AVFoundation) + OCR (Vision, ~2 khung/giây) |
-| `AutoScanViewModel.swift` | Gom mã vạch + mã kho trong cửa sổ 2 giây, gửi nền, bỏ qua nhãn lỗi, tự gửi lại |
+| `CameraEngine.swift` | Camera liên tục: barcode (AVFoundation) + OCR (Vision, chạy liên tục, tự lấy nét lại khi kẹt) |
+| `AutoScanViewModel.swift` | Gom mã vạch + mã kho trong cửa sổ 1 giây, gửi nền, bỏ qua nhãn lỗi, tự gửi lại |
 | `AutoScanView.swift` | Màn hình quét: hiện kho của nhãn vừa quét |
 | `RuleMatcher.swift` | Khớp regex như server + sửa lỗi OCR (`_` bị mất, `0`/`O`) |
 | `APIClient.swift` | Gọi API web |

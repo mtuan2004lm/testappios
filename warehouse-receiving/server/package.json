@@ -10,7 +10,9 @@
     "dev": "node --watch index.js",
     "db:init": "node scripts/init-db.js",
     "db:view": "node scripts/view-db.js",
-    "db:recompute": "node scripts/recompute-items.js"
+    "db:recompute": "node scripts/recompute-items.js",
+    "db:fix-rules": "node scripts/fix-rules.js",
+    "db:fix-noname": "node scripts/fix-noname.js"
   },
   "dependencies": {
     "cors": "^2.8.5",

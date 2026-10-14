@@ -40,6 +40,11 @@ struct AutoScanView: View {
                 if let b = vm.banner {
                     Text(b).font(.footnote.bold()).padding(8).background(.ultraThinMaterial, in: Capsule())
                 }
+                if let h = vm.hint {
+                    Text(h).font(.footnote.bold()).foregroundStyle(.white).multilineTextAlignment(.center)
+                        .padding(.horizontal, 12).padding(.vertical, 6)
+                        .background(Color.black.opacity(0.65), in: Capsule())
+                }
                 Spacer()
                 resultCard
                 buttons

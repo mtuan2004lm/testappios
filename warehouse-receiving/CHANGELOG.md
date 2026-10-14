@@ -86,6 +86,60 @@
 
 ## 4. Lịch sử thay đổi (mới nhất ở trên)
 
+### 2026-10-14 — ⭐🗄️🧪 Kiện NO NAME tự có ngoại lệ "Không xác định" (trước đây là "Bình thường")
+- **Vì sao:** NO NAME và "Không xác định" trước đây lưu tách riêng; kiện NO NAME mặc định ngoại lệ "Bình thường" nên không được đếm / tô đỏ như Không xác định. Chọn phương án 2: NO NAME tính là Không xác định (nhãn tím NO NAME vẫn hiện để phân biệt).
+- **Sửa (`scanController.js` → `makeItem`):** `exception_status` = `UNKNOWN` khi `noName`, ngược lại `NORMAL`. Khi sau này gán được mã kho cho kiện thì ngoại lệ tự về Bình thường (logic cũ giữ nguyên). Cần khởi động lại server.
+- **Dữ liệu cũ (🗄️):** `server/scripts/fix-noname.js` (`npm run db:fix-noname`) đổi mọi kiện NO NAME đang "Bình thường" sang "Không xác định"; kiện đã đổi tay sang Hư hỏng / Đang giữ / Bị chặn giữ nguyên; chạy lại an toàn.
+- Đã test sandbox: quét 3 tracking không thông tin + END CODE → `is_no_name = true`, `exception_status = UNKNOWN`; script đổi đúng 1 kiện.
+- Lưu ý: bộ đếm "Không xác định" và "No Name" trên web giờ có thể cùng đếm một kiện (đúng ý phương án 2).
+
+### 2026-10-14 — 🧪 "Không xác định" hiện chữ đỏ
+- `client/src/views/SessionScan.vue`: dòng đếm "Không xác định" ở khung thống kê (icon + chữ đậm đỏ); ô chọn Ngoại lệ của từng kiện khi đang là "Không xác định" (chữ đậm đỏ, viền đỏ nhạt). Chỉ đổi giao diện web, không cần khởi động lại server (chỉ tải lại trang).
+
+### 2026-10-14 — ⭐🧪 Sửa: thẻ SUCCESS trên web hiện tracking ở dòng "Mã kho" (UPS 1Z…, Amazon TBA…)
+- **Triệu chứng:** quét label UPS / Amazon (TBA) không đọc được mã kho thì thẻ SUCCESS ở màn hình quét web vẫn ghi "Mã kho: <mã tracking>", Nhóm KH "—".
+- **Nguyên nhân:** dữ liệu **lưu** đã đúng (cột mã kho để trống), nhưng `successResponse` ghi `receiving_sessions.last_scan_text = mt`, mà `mt` có phương án dự phòng là chính tracking → thẻ web (đọc từ `last_scan_text`) hiện tracking như mã kho.
+- **Sửa (`scanController.js`):** `last_scan_text` = `item.detected_warehouse_code` (mã kho thật đã lưu, hoặc trống). Cần khởi động lại server.
+- Đã test sandbox: quét `1Z44016X0393539152` không kèm chữ → `last_scan_text = null`; kèm "FD VAT HUE" → "FD VAT HUE" / FADO.VN.
+- **Còn lại:** nếu Nhóm KH vẫn "—" thì do app chưa đọc được chữ mã kho trên tem (OCR) hoặc quy tắc chưa khớp (xem mục FD VAT HUE cùng ngày). Với label Amazon TBA, dòng "SGHUE DOFA" rất nhỏ, cần để tem gần camera hơn.
+
+### 2026-10-14 — ⭐🗄️🧪 Sửa quy tắc mã kho FADO.VN: nhận "FD VAT HUE" (có khoảng trắng)
+- **Triệu chứng:** label có mã kho "FD VAT HUE" nhưng app/web không nhận (Nhóm KH trống), tracking còn hiện ở cột Mã kho.
+- **Nguyên nhân:** quy tắc mặc định `^(FDVAT HUE|SGHUE DOFA|HNBANGTY DOFA|SG FRAGILE DOFA|HN FRAGILE DOFA)` viết dính chữ (FDVAT) trong khi nhãn in "FD VAT HUE". OCR đọc đúng nhưng không khớp regex.
+- **Sửa:** quy tắc mới `^(FD ?VAT ?HUE|SG ?HUE DOFA|HN ?BANGTY DOFA|SG ?FRAGILE DOFA|HN ?FRAGILE DOFA)` (khoảng trắng tùy chọn). Thêm `server/scripts/fix-rules.js` (`npm run db:fix-rules`): chỉ sửa khi quy tắc còn là bản mặc định cũ, chạy lại nhiều lần vẫn an toàn; `schema.sql` đã đổi seed cho database mới.
+- **Cách dùng (🗄️):** `cd server && npm run db:fix-rules`, rồi tắt/mở lại app iPhone (app tải quy tắc khi mở), rồi nếu cần `npm run db:recompute` để tính lại kiện cũ (lưu ý lệnh này tính lại cả loại hình, ghi đè chỉnh tay; muốn chỉ dọn tracking nhầm thì dùng `-- --clear-only`).
+- Đã test trên sandbox: "FD VAT HUE", "FDVAT HUE", "fd vat hue" đều khớp FADO.VN; "FD VAT" và chuỗi tracking UPS không khớp.
+
+### 2026-10-14 — ⭐🔥📱🧪 Sửa lỗi "đưa tem vào mà không quét, phải che camera mới quét lại" (thử nghiệm, có thể quay lại)
+- **Nguyên nhân:** app nhớ mọi mã đã gửi; tem đã quét còn trong khung (hoặc rời khung chưa tới 1,5 giây rồi quay lại) thì bị bỏ qua **âm thầm** — không báo gì, nhìn như app hỏng. Che camera >1,5 giây làm app coi tem đã rời khung. Ngoài ra, khi tem cũ còn sót một phần trong khung, app chặn 2 giây chữ mã kho nên tem mới bị nuốt mã kho.
+- **Sửa (`AutoScanViewModel.swift`):** (1) thêm `hint` + `showHint` hiện lý do im lặng ("Tem này đã quét rồi — đưa ra khỏi khung rồi đưa lại để báo trùng", "Tem này vừa báo lỗi — đợi vài giây rồi đưa lại"); (2) thời gian "tem rời khung" để quét lại 1,5 → **0,7 giây**; (3) `hasNew`: khi trong khung có tem mới thì tem cũ **không** chặn / xóa chữ mã kho nữa, và `suppressTextUntil` được hủy khi tem mới vào.
+- **Sửa (`AutoScanView.swift`):** hiện `vm.hint` dưới thanh thông báo. `AppStore.buildTag` đã đổi.
+- 🧪 Swift chưa build thử ở sandbox → thử trên máy thật.
+- **Quay lại bản cũ nếu không ổn:** bản trước nằm ở `WarehouseScanner-iOS/_backup_truoc_2026-10-14/` (3 file). Chạy:
+  `cd WarehouseScanner-iOS && cp _backup_truoc_2026-10-14/*.swift WarehouseScanner/` rồi build lại.
+
+### 2026-10-14 — 📱🧪 Khung quét to hơn (chỉ là khung hướng dẫn trên màn hình)
+- `Extensions.swift` → `Reticle`: khung cố định 320×200 đổi thành rộng gần hết màn hình (chiều rộng − 24, cao ≈ 0,8 × rộng, tối đa 55% chiều cao màn hình).
+- **Lưu ý:** khung chỉ để căn nhãn. Camera **đọc toàn bộ khung hình** cho cả mã vạch lẫn OCR từ trước đến nay, nên khung to hơn **không tự làm quét nhanh hơn**; tốc độ phụ thuộc khoảng cách/độ nét (xem mục 2026-10-13). Chưa build thử Swift trên sandbox.
+
+### 2026-10-13 — ⭐🧪📱 Quét nhanh hơn ~2 lần + tự lấy nét lại khi camera kẹt (phải che camera mới quét lại)
+- **Triệu chứng:** thỉnh thoảng camera không đọc được tem, phải che camera đi rồi mới nhận lại; tốc độ quét chưa cao.
+- **Nguyên nhân khả dĩ:** camera kẹt lấy nét/phơi sáng (che camera buộc nó lấy nét lại); ngoài ra OCR bị giới hạn ~8 lần/giây vì có khoảng nghỉ 0,1 giây và cứ 4 lần có 1 lần đọc kỹ (chậm).
+- **Sửa (`CameraEngine.swift`):** bỏ khoảng nghỉ 0,1 giây giữa hai lần OCR (khung này xong là đọc khung kế); đọc kỹ 1/8 khung thay vì 1/4; **tự lấy nét + đo sáng lại** khi OCR thấy chữ (tem đang trong khung) nhưng >1,5 giây không đọc được mã vạch (tối đa 2 giây/lần, sau 0,4 giây trở lại lấy nét liên tục).
+- **Sửa (`AutoScanViewModel.swift`):** cửa sổ đọc một tem 1,5 → **1,0 giây**; đồng hồ cập nhật mỗi 50 ms (trước 100 ms); mã kho đọc trước đó còn hiệu lực 1,0 giây (trước 1,5).
+- **Lưu ý 🧪:** Swift chưa build thử được trên sandbox; cần thử trên ~30-50 tem thật. Cửa sổ ngắn hơn có thể làm tăng số tem "thiếu mã kho" → nếu thấy nhiều thì đổi `window` về 1,5. Chưa hứa đúng "gấp 2" — số đo thật phải đo trên máy.
+- `AppStore.buildTag` đã đổi để nhận biết bản mới.
+
+### 2026-10-13 — Tài liệu: thêm mục "Công nghệ sử dụng" vào README
+- `README.md` có mục mới liệt kê công nghệ của database (PostgreSQL), server (Node 22, Express 4, pg), web (Vue 3, Vite, Tailwind, ZXing), app iPhone (Swift/SwiftUI, AVFoundation, Vision, XcodeGen) và công cụ (Playwright, draw.io). Không đổi code.
+
+### 2026-10-12 — ⭐🔥 Sửa lỗi: tracking bị lưu nhầm thành "Mã kho" (cột Nhóm KH / Mã kho hiện "—" kèm mã tracking)
+- **Nguyên nhân:** mã vạch USPS GS1-128 chứa ký tự điều khiển ẩn `GS` (0x1D). Server đã lọc ký tự này khỏi `barcode` nhưng **không lọc khỏi `detected_text`** → hai chuỗi lệch nhau → server tưởng chuỗi đó là "mã kho đọc từ nhãn" và lưu tracking vào `detected_warehouse_code`; vì không khớp quy tắc nên Nhóm KH trống ("—"). Xảy ra với quét bằng web (web gửi `detected_text = barcode`) và mọi trường hợp chuỗi gửi lên là chính tracking.
+- **Sửa (`server/controllers/scanController.js`):** `detectedText` được lọc ký tự điều khiển giống `barcode`; so sánh barcode ↔ mã kho bỏ khoảng trắng / không phân biệt hoa thường (`squash`); `makeItem` coi chuỗi là **không phải mã kho** nếu trùng tracking của kiện, tracking khớp, hoặc Tracking / Mã khác 1 / Mã khác 2 của mặt hàng.
+- **Dọn dữ liệu cũ (`server/scripts/recompute-items.js`):** `npm run db:recompute -- --clear-only` — chỉ xóa "mã kho" thực chất là tracking (trùng barcode hoặc chỉ gồm ≥10 chữ số, không khớp quy tắc nào); **không** tính lại Nhóm KH / Loại hình nên không mất chỉnh sửa tay. (`npm run db:recompute` không kèm cờ vẫn tính lại tất cả như cũ.) Đã test: kiện lỗi được xóa mã kho, kiện có nhóm chỉnh tay giữ nguyên.
+- 🔥 Lưu ý: kiện quét bằng **web / máy quét** không đọc được chữ trên tem nên vẫn không có Nhóm KH / Mã kho (hiện "—"); chỉ app iPhone (OCR) đọc được mã kho in trên tem.
+- Không đổi schema. Cần khởi động lại server.
+
 ### 2026-10-12 — ⭐🔥 📱 Sửa lỗi: ảnh label không được lưu đủ cho mọi kiện trong phiên
 - **Các lỗ hổng tìm thấy trong code (bản tự chụp trước đó):**
   1. Ảnh chụp lúc **gửi** (sau cửa sổ đọc 1,5 giây), không phải lúc thấy mã → tem có thể đã rời khung, ảnh sai hoặc trống.

@@ -34,7 +34,7 @@ SELECT * FROM (VALUES
   ('Giaonhan247', '^(SGKYDUYEN_|HNKYDUYEN_|SGVO_|HNVO_)',                                   'KHONG_KINH_DOANH'::business_type_enum, FALSE),
   ('FADO 168',    '^(CHHEN_|SG HUE_DOFA168|SG FRAGILE_DOFA168)',                            'KHONG_KINH_DOANH'::business_type_enum, FALSE),
   ('MICAFI',      '(MCF$|MCF\s)',                                                           'KHONG_KINH_DOANH'::business_type_enum, FALSE),
-  ('FADO.VN',     '^(FDVAT HUE|SGHUE DOFA|HNBANGTY DOFA|SG FRAGILE DOFA|HN FRAGILE DOFA)', 'KINH_DOANH'::business_type_enum,       TRUE)
+  ('FADO.VN',     '^(FD ?VAT ?HUE|SG ?HUE DOFA|HN ?BANGTY DOFA|SG ?FRAGILE DOFA|HN ?FRAGILE DOFA)', 'KINH_DOANH'::business_type_enum,       TRUE)
 ) AS v(customer_group, pattern_regex, business_type, requires_import_check)
 WHERE NOT EXISTS (SELECT 1 FROM warehouse_rules);
 

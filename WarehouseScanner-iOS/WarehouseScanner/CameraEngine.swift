@@ -5,7 +5,7 @@ import CoreImage
 
 /// Camera chạy liên tục. Cùng một luồng hình cho cả hai việc:
 ///  - Đọc barcode bằng AVCaptureMetadataOutput (nhanh, chạy trên chip chuyên dụng)
-///  - Đọc chữ (mã kho in trên nhãn) bằng Vision, chỉ khi bật `ocrEnabled`, đọc nhanh (.fast) ~8 khung/giây, cứ 4 lần thì có 1 lần đọc kỹ (.accurate) để không bỏ sót chữ nhỏ.
+///  - Đọc chữ (mã kho in trên nhãn) bằng Vision, chỉ khi bật `ocrEnabled`, đọc nhanh (.fast) tối đa tốc độ máy cho phép, cứ 8 lần thì có 1 lần đọc kỹ (.accurate) để không bỏ sót chữ nhỏ.
 final class CameraEngine: NSObject, ObservableObject,
                           AVCaptureMetadataOutputObjectsDelegate, AVCaptureVideoDataOutputSampleBufferDelegate {
 
@@ -29,6 +29,9 @@ final class CameraEngine: NSObject, ObservableObject,
     private var _ocrBusy = false
     private var _lastOCR = Date.distantPast
     private var _ocrCount = 0
+    private var _lastBarcodeAt = Date.distantPast      // lần cuối thấy mã vạch
+    private var _lastTextAt = Date.distantPast         // lần cuối OCR thấy chữ (tem đang nằm trong khung)
+    private var _lastRefocus = Date.distantPast
     private var _latest: CVPixelBuffer?                // khung hình mới nhất (để chụp ảnh label khi quét)
     private static let ciContext = CIContext()
     var ocrEnabled: Bool {
@@ -125,7 +128,10 @@ final class CameraEngine: NSObject, ObservableObject,
     func metadataOutput(_ output: AVCaptureMetadataOutput, didOutput metadataObjects: [AVMetadataObject],
                         from connection: AVCaptureConnection) {
         let codes = metadataObjects.compactMap { ($0 as? AVMetadataMachineReadableCodeObject)?.stringValue }
-        if !codes.isEmpty { onBarcodes?(codes) }
+        if !codes.isEmpty {
+            lock.lock(); _lastBarcodeAt = Date(); lock.unlock()
+            onBarcodes?(codes)
+        }
     }
 
     // MARK: Chụp ảnh label (khung hình camera ngay lúc quét)
@@ -145,15 +151,47 @@ final class CameraEngine: NSObject, ObservableObject,
         }
     }
 
+    // MARK: Tự lấy nét lại
+
+    /// Tem đang nằm trong khung (OCR thấy chữ) nhưng >1,5 giây không đọc được mã vạch -> nhiều khả năng camera kẹt nét/phơi sáng
+    /// (trước đây phải che camera để nó lấy nét lại). Kích hoạt lấy nét + đo sáng lại, tối đa mỗi 2 giây một lần.
+    private func refocusIfStuck() {
+        let now = Date()
+        lock.lock()
+        let stuck = now.timeIntervalSince(_lastTextAt) < 1.0
+            && now.timeIntervalSince(_lastBarcodeAt) > 1.5
+            && now.timeIntervalSince(_lastRefocus) > 2.0
+        if stuck { _lastRefocus = now }
+        lock.unlock()
+        guard stuck else { return }
+        sessionQueue.async { [weak self] in
+            guard let cam = self?.device, (try? cam.lockForConfiguration()) != nil else { return }
+            let center = CGPoint(x: 0.5, y: 0.5)
+            if cam.isFocusPointOfInterestSupported { cam.focusPointOfInterest = center }
+            if cam.isFocusModeSupported(.autoFocus) { cam.focusMode = .autoFocus }                 // lấy nét một lần ngay
+            if cam.isExposurePointOfInterestSupported { cam.exposurePointOfInterest = center }
+            if cam.isExposureModeSupported(.continuousAutoExposure) { cam.exposureMode = .continuousAutoExposure }
+            cam.unlockForConfiguration()
+            // Xong thì trở lại lấy nét liên tục
+            DispatchQueue.global().asyncAfter(deadline: .now() + 0.4) {
+                guard (try? cam.lockForConfiguration()) != nil else { return }
+                if cam.isFocusModeSupported(.continuousAutoFocus) { cam.focusMode = .continuousAutoFocus }
+                cam.unlockForConfiguration()
+            }
+        }
+    }
+
     // MARK: OCR
 
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         if let buf = CMSampleBufferGetImageBuffer(sampleBuffer) { lock.lock(); _latest = buf; lock.unlock() }
         lock.lock()
-        let allowed = _ocrEnabled && !_ocrBusy && Date().timeIntervalSince(_lastOCR) > 0.1
+        // Không còn khoảng nghỉ giữa hai lần OCR: xong khung này là đọc ngay khung kế tiếp (nhanh ~2x)
+        let allowed = _ocrEnabled && !_ocrBusy
         var accurate = false
-        if allowed { _ocrBusy = true; _lastOCR = Date(); _ocrCount += 1; accurate = _ocrCount % 4 == 0 }
+        if allowed { _ocrBusy = true; _lastOCR = Date(); _ocrCount += 1; accurate = _ocrCount % 8 == 0 }
         lock.unlock()
+        refocusIfStuck()
         guard allowed, let buffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
 
         let request = VNRecognizeTextRequest { [weak self] req, _ in
@@ -161,9 +199,12 @@ final class CameraEngine: NSObject, ObservableObject,
                 .compactMap { $0.topCandidates(1).first }
                 .filter { $0.confidence > 0.3 }
                 .map { $0.string } ?? []
-            if !lines.isEmpty { DispatchQueue.main.async { self?.onTextLines?(lines) } }
+            if !lines.isEmpty {
+                self?.lock.lock(); self?._lastTextAt = Date(); self?.lock.unlock()
+                DispatchQueue.main.async { self?.onTextLines?(lines) }
+            }
         }
-        // Phần lớn khung hình đọc nhanh (.fast, ~vài chục ms) để ra kết quả sớm; 1/4 khung đọc kỹ cho chữ nhỏ/mờ
+        // Phần lớn khung hình đọc nhanh (.fast, ~vài chục ms) để ra kết quả sớm; 1/8 khung đọc kỹ cho chữ nhỏ/mờ
         request.recognitionLevel = accurate ? .accurate : .fast
         request.usesLanguageCorrection = false     // mã không phải từ điển, tránh bị "sửa" sai
 

@@ -5,6 +5,9 @@
 // Lưu ý: loại hình đã đổi tay (KINH_DOANH <-> KHONG_KINH_DOANH) sẽ được tính lại theo quy tắc.
 const { pool } = require('../config/db');
 const { matchRule } = require('../utils/ruleMatcher');
+// --clear-only: CHỈ xóa "mã kho" bị ghi nhầm là mã tracking, KHÔNG tính lại nhóm KH / loại hình (giữ nguyên các chỉnh sửa tay)
+const CLEAR_ONLY = process.argv.includes('--clear-only');
+const squash = (v) => String(v || '').replace(/[\x00-\x1F\x7F\s]+/g, '').toUpperCase();
 
 (async () => {
   const client = await pool.connect();
@@ -15,7 +18,14 @@ const { matchRule } = require('../utils/ruleMatcher');
     await client.query('BEGIN');
     for (const it of items) {
       const rule = it.text ? matchRule(it.text, rules) : null;
-      const clearText = it.text && !rule && it.text === it.barcode;       // chỉ là barcode lặp lại
+      // Mã kho thực chất là tracking: trùng barcode (bỏ khoảng trắng / ký tự ẩn) hoặc chỉ gồm chữ số dài, và không khớp quy tắc nào
+      const clearText = !!it.text && !rule && (squash(it.text) === squash(it.barcode) || /^\d{10,}$/.test(squash(it.text)));
+      if (CLEAR_ONLY) {
+        if (!clearText) continue;
+        const r = await client.query('UPDATE scanned_items SET detected_warehouse_code = NULL WHERE id = $1', [it.id]);
+        if (r.rowCount) { changed++; cleared++; }
+        continue;
+      }
       const { rowCount } = await client.query(
         `UPDATE scanned_items
             SET detected_warehouse_code = $2, matched_rule_id = $3, customer_group = $4, business_type = $5

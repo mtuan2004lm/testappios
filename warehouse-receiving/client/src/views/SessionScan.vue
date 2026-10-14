@@ -62,7 +62,7 @@ const filtered = computed(() => {
 });
 
 const exceptionRows = [
-  { key: 'UNKNOWN', label: 'Không xác định', icon: HelpCircle, color: 'text-slate-500' },
+  { key: 'UNKNOWN', label: 'Không xác định', icon: HelpCircle, color: 'text-red-600' },
   { key: 'DAMAGED', label: 'Hư hỏng', icon: Hammer, color: 'text-red-500' },
   { key: 'HOLDING', label: 'Đang giữ hàng', icon: PauseCircle, color: 'text-amber-500' },
   { key: 'BLOCKED', label: 'Bị chặn', icon: ShieldBan, color: 'text-rose-600' },
@@ -321,7 +321,7 @@ onMounted(async () => {
           <h2 class="mb-3 text-sm font-bold uppercase tracking-wide text-slate-500">Ngoại lệ</h2>
           <ul class="divide-y divide-slate-100">
             <li v-for="r in exceptionRows" :key="r.key" class="flex items-center justify-between py-2.5 text-sm">
-              <span class="flex items-center gap-2.5"><component :is="r.icon" class="h-4 w-4" :class="r.color" />{{ r.label }}</span>
+              <span class="flex items-center gap-2.5"><component :is="r.icon" class="h-4 w-4" :class="r.color" /><span :class="r.key === 'UNKNOWN' ? 'font-bold text-red-600' : ''">{{ r.label }}</span></span>
               <span class="min-w-8 rounded-full px-2.5 py-0.5 text-center text-xs font-bold" :class="exceptionCounts[r.key] ? 'bg-accent text-white' : 'bg-slate-100 text-slate-400'">{{ exceptionCounts[r.key] }}</span>
             </li>
           </ul>
@@ -467,7 +467,7 @@ onMounted(async () => {
                         <input type="file" accept="image/*" capture="environment" class="hidden" @change="uploadLabel(i, $event)" />
                       </label>
                     </div>
-                    <select :value="i.exception_status" :disabled="!isOpen" class="w-full rounded-md border border-slate-200 bg-white px-1.5 py-1 text-xs" @change="changeException(i, $event.target.value)">
+                    <select :value="i.exception_status" :disabled="!isOpen" class="w-full rounded-md border bg-white px-1.5 py-1 text-xs" :class="i.exception_status === 'UNKNOWN' ? 'border-red-300 font-bold text-red-600' : 'border-slate-200'" @change="changeException(i, $event.target.value)">
                       <option value="NORMAL">Bình thường</option><option value="UNKNOWN">Không xác định</option><option value="DAMAGED">Hư hỏng</option>
                       <option value="HOLDING">Đang giữ</option><option value="BLOCKED">Bị chặn</option>
                     </select>

@@ -19,9 +19,11 @@ const MAX_TRACKS = 3;   // toi da 3 ma tracking tren mot tem
 exports.scan = asyncHandler(async (req, res) => {
   const sessionId = parseId(req.params.id);
   // Bo ky tu dieu khien an trong ma vach (vd GS \x1D cua GS1-128: "42097220<GS>9334...") roi moi so khop / luu
-  const barcode = String((req.body && req.body.barcode) || '').replace(/[\x00-\x1F\x7F]/g, '').trim();
+  const stripCtl = (v) => String(v || '').replace(/[\x00-\x1F\x7F]/g, '').trim();   // bỏ ký tự điều khiển ẩn (vd GS 0x1D trong mã USPS GS1-128)
+  const squash = (v) => stripCtl(v).replace(/\s+/g, '').toUpperCase();                // so sánh bỏ khoảng trắng, không phân biệt hoa thường
+  const barcode = stripCtl(req.body && req.body.barcode);
   // detected_text la chuoi ma kho doc tu nhan; neu app khong gui thi dung chinh barcode de khop
-  const detectedText = String((req.body && req.body.detected_text) || '').trim() || barcode;
+  const detectedText = stripCtl(req.body && req.body.detected_text) || barcode;     // phải lọc giống barcode, nếu không tracking bị lưu nhầm thành "mã kho"
   const scannedBy = (req.body && req.body.scanned_by) || null;
 
   if (!barcode) throw new HttpError(400, 'barcode là bắt buộc', 'BARCODE_REQUIRED');
@@ -41,21 +43,23 @@ exports.scan = asyncHandler(async (req, res) => {
       'SELECT * FROM label_scans WHERE session_id = $1 AND item_id IS NULL ORDER BY seq, id', [sessionId])).rows;
 
     // Ma kho: uu tien chu doc tu nhan (app) -> khop regex quy tac
-    const hasExplicitText = detectedText !== barcode;
+    const hasExplicitText = squash(detectedText) !== squash(barcode);
     const reg = (await client.query('SELECT warehouse_code FROM tracking_codes WHERE barcode = $1', [barcode])).rows[0];
     const rules = (await client.query('SELECT * FROM warehouse_rules WHERE is_active = TRUE ORDER BY id')).rows;
     const textForRule = (txt) => matchRule(txt, rules);
 
     // Tao kien tu mot tem: tracking goc + cac tracking truoc do ttren tem
     const makeItem = async ({ rootCode, product, carrier, matched, text, noName }) => {
-      const explicit = !!text && text !== rootCode;
+      // "Mã kho" chỉ là chữ đọc từ nhãn. Nếu chuỗi gửi lên thực chất là mã tracking (của chính kiện này hoặc mã khác của mặt hàng) thì KHÔNG phải mã kho
+      const codes = [rootCode, matched, product && product.tracking_code, product && product.alt_code, product && product.alt_code2].filter(Boolean).map(squash);
+      const explicit = !!text && !codes.includes(squash(text));
       const mt = explicit ? text : ((reg && reg.warehouse_code) || text || rootCode);
       const rule = textForRule(mt);
       const ins = await client.query(
         `INSERT INTO scanned_items
            (session_id, barcode, detected_warehouse_code, matched_rule_id, customer_group, business_type, exception_status, scanned_by,
             detected_carrier, matched_tracking, product_id, is_no_name)
-         VALUES ($1, $2, $3, $4, $5, $6, 'NORMAL', COALESCE($7, 'Nhan vien 01'), $8, $9, $10, $11)
+         VALUES ($1, $2, $3, $4, $5, $6, (CASE WHEN $11::boolean THEN 'UNKNOWN' ELSE 'NORMAL' END)::item_exception_enum, COALESCE($7, 'Nhan vien 01'), $8, $9, $10, $11)
          RETURNING *`,
         [sessionId, rootCode, (rule || explicit) ? mt : null, rule ? rule.id : null, rule ? rule.customer_group : null,
          rule ? rule.business_type : null, scannedBy, carrier, matched, product ? product.id : null, !!noName]);
@@ -80,7 +84,7 @@ exports.scan = asyncHandler(async (req, res) => {
                 last_scan_status = $6, last_scan_at = CURRENT_TIMESTAMP, last_scan_barcode = $2,
                 last_scan_text = $3, last_scan_group = $4, last_scan_exception = $5
           WHERE id = $1 RETURNING scanned_count, total_expected_packages`,
-        [sessionId, item.barcode, mt, rule ? rule.customer_group : null, 'NORMAL', status]);
+        [sessionId, item.barcode, item.detected_warehouse_code || null, rule ? rule.customer_group : null, 'NORMAL', status]);   // chỉ hiện mã kho thật (đã lưu), không lấy tracking làm mã kho
       // Gan cac tracking cua tem nay vao kien
       await client.query('UPDATE label_scans SET item_id = $2 WHERE session_id = $1 AND item_id IS NULL', [sessionId, item.id]);
       await client.query('COMMIT');
