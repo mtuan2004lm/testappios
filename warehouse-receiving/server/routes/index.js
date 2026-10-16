@@ -23,6 +23,7 @@ router.post('/receiving/sessions/:id/classify', scan.classify);
 router.patch('/receiving/sessions/:id/finalize', sessions.finalizeCount);
 router.patch('/receiving/sessions/:id/close', sessions.closeSession);
 
+router.post('/receiving/sessions/:id/items/delete', items.deleteItems);
 router.patch('/scanned-items/:id/toggle-business-type', items.toggleBusinessType);
 router.patch('/scanned-items/:id/exception', items.setException);
 // Anh tho (image/*) toi da 10MB

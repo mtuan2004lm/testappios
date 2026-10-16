@@ -1,23 +1,24 @@
 <script setup>
+import { tr } from '../i18n';
 import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { ArrowLeft, Search, Copy, Check, Plus, X, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-vue-next';
 import { api } from '../api';
 
 const REASONS = [
-  { v: 'SELLER_RETURN_REQUEST', label: 'Seller return request / Người bán yêu cầu trả hàng' },
-  { v: 'CUSTOMER_REQUEST', label: 'Customer request / Khách yêu cầu giữ hàng' },
-  { v: 'ADDRESS_ISSUE', label: 'Address issue / Sai hoặc thiếu địa chỉ' },
-  { v: 'DOCUMENT_MISSING', label: 'Document missing / Thiếu chứng từ' },
-  { v: 'OTHER', label: 'Other / Lý do khác' },
+  { v: 'SELLER_RETURN_REQUEST', get label() { return tr('Seller return request / Người bán yêu cầu trả hàng') } },
+  { v: 'CUSTOMER_REQUEST', get label() { return tr('Customer request / Khách yêu cầu giữ hàng') } },
+  { v: 'ADDRESS_ISSUE', get label() { return tr('Address issue / Sai hoặc thiếu địa chỉ') } },
+  { v: 'DOCUMENT_MISSING', get label() { return tr('Document missing / Thiếu chứng từ') } },
+  { v: 'OTHER', get label() { return tr('Other / Lý do khác') } },
 ];
 const tabs = [
-  { v: 'HOLD', label: 'Kho giữ / Hold', key: 'hold', dot: 'bg-slate-700' },
-  { v: 'BLOCK', label: 'Khách yêu cầu / Block', key: 'block', dot: 'bg-indigo-400' },
-  { v: 'DONE', label: 'Đã xử lý', key: 'done', dot: 'bg-emerald-400' },
+  { v: 'HOLD', get label() { return tr('Kho giữ / Hold') }, key: 'hold', dot: 'bg-slate-700' },
+  { v: 'BLOCK', get label() { return tr('Khách yêu cầu / Block') }, key: 'block', dot: 'bg-indigo-400' },
+  { v: 'DONE', get label() { return tr('Đã xử lý') }, key: 'done', dot: 'bg-emerald-400' },
 ];
 const presets = [
-  { v: 'ALL', label: 'Tất cả' }, { v: 'TODAY', label: 'Hôm nay' }, { v: 'YESTERDAY', label: 'Hôm qua' }, { v: '7D', label: '7 ngày' },
-  { v: 'MONTH', label: 'Tháng này' }, { v: 'LASTMONTH', label: 'Tháng trước' }, { v: 'CUSTOM', label: 'Tuỳ chọn' },
+  { v: 'ALL', get label() { return tr('Tất cả') } }, { v: 'TODAY', get label() { return tr('Hôm nay') } }, { v: 'YESTERDAY', get label() { return tr('Hôm qua') } }, { v: '7D', get label() { return tr('7 ngày') } },
+  { v: 'MONTH', get label() { return tr('Tháng này') } }, { v: 'LASTMONTH', get label() { return tr('Tháng trước') } }, { v: 'CUSTOM', get label() { return tr('Tuỳ chọn') } },
 ];
 const ymd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 function range(p) {
@@ -94,7 +95,7 @@ async function dSave(body) {
   try { await api.patchHold(detail.value.id, body); detail.value = null; await load(pagination.value.page); } catch (e) { dError.value = e.message; }
 }
 async function dDelete() {
-  if (!confirm('Xóa bản ghi giữ hàng này?')) return;
+  if (!confirm(tr('Xóa bản ghi giữ hàng này?'))) return;
   try { await api.deleteHold(detail.value.id); detail.value = null; await load(pagination.value.page); } catch (e) { dError.value = e.message; }
 }
 </script>
@@ -103,11 +104,11 @@ async function dDelete() {
   <div>
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <RouterLink to="/receiving/sessions" class="btn-outline mb-4 !border-navy !text-navy"><span class="flex h-5 w-5 items-center justify-center rounded bg-navy text-white"><ArrowLeft class="h-3.5 w-3.5" /></span> Quay lại · Phiên nhận hàng</RouterLink>
-        <h1 class="border-l-4 border-navy pl-3 text-2xl font-extrabold text-slate-900">Hàng đang giữ</h1>
-        <p class="mt-1 mb-4 text-sm text-slate-500">Kiện chưa được bay — kho giữ hoặc khách yêu cầu.</p>
+        <RouterLink to="/receiving/sessions" class="btn-outline mb-4 !border-navy !text-navy"><span class="flex h-5 w-5 items-center justify-center rounded bg-navy text-white"><ArrowLeft class="h-3.5 w-3.5" /></span> {{ tr('Quay lại · Phiên nhận hàng') }}</RouterLink>
+        <h1 class="border-l-4 border-navy pl-3 text-2xl font-extrabold text-slate-900">{{ tr('Hàng đang giữ') }}</h1>
+        <p class="mt-1 mb-4 text-sm text-slate-500">{{ tr('Kiện chưa được bay — kho giữ hoặc khách yêu cầu.') }}</p>
       </div>
-      <button class="btn-accent mt-14" @click="openAdd"><Plus class="h-4 w-4" /> Thêm hàng giữ</button>
+      <button class="btn-accent mt-14" @click="openAdd"><Plus class="h-4 w-4" /> {{ tr('Thêm hàng giữ') }}</button>
     </div>
 
     <div class="card overflow-hidden">
@@ -120,13 +121,13 @@ async function dDelete() {
 
       <div class="flex flex-wrap items-center gap-2 p-3">
         <div class="flex">
-          <input v-model="f.search" class="input h-9 w-44 rounded-r-none" placeholder="Mã kiện" @keyup.enter="load(1)" />
+          <input v-model="f.search" class="input h-9 w-44 rounded-r-none" :placeholder="tr('Mã kiện')" @keyup.enter="load(1)" />
           <button class="btn-outline h-9 rounded-l-none border-l-0 px-3" @click="load(1)"><Search class="h-4 w-4" /></button>
         </div>
-        <label class="flex cursor-pointer items-center gap-1.5 rounded border border-slate-300 bg-white px-2.5 py-2 text-sm"><input v-model="f.noLoc" type="checkbox" /> Chưa có vị trí</label>
+        <label class="flex cursor-pointer items-center gap-1.5 rounded border border-slate-300 bg-white px-2.5 py-2 text-sm"><input v-model="f.noLoc" type="checkbox" /> {{ tr('Chưa có vị trí') }}</label>
         <div class="relative">
           <select v-model="f.location" :disabled="f.noLoc" class="input h-9 w-44 cursor-pointer appearance-none pr-8 disabled:opacity-50" :class="{ 'text-slate-400': !f.location }">
-            <option value="">Vị trí</option><option v-for="b in bins" :key="b.id" :value="b.id" class="text-slate-800">{{ b.code }}</option>
+            <option value="">{{ tr('Vị trí') }}</option><option v-for="b in bins" :key="b.id" :value="b.id" class="text-slate-800">{{ b.code }}</option>
           </select>
           <ChevronDown class="pointer-events-none absolute right-2.5 top-2.5 h-4 w-4 text-slate-400" />
         </div>
@@ -139,10 +140,10 @@ async function dDelete() {
       </div>
 
       <div v-if="selected.size" class="flex flex-wrap items-center gap-2 border-y border-amber-200 bg-amber-50 px-4 py-2 text-sm">
-        <b>Đã chọn {{ selected.size }} kiện</b>
-        <select v-model="bulkLoc" class="input h-8 w-44 py-0"><option value="">— Vị trí —</option><option v-for="b in bins" :key="b.id" :value="b.id">{{ b.code }}</option></select>
-        <button class="btn-outline h-8 px-3" :disabled="!bulkLoc" @click="bulk('assign')">Gán vị trí</button>
-        <button v-if="tab !== 'DONE'" class="btn-navy h-8 px-3" @click="bulk('resolve')">Đánh dấu đã xử lý</button>
+        <b>{{ tr('Đã chọn {0} kiện', selected.size) }}</b>
+        <select v-model="bulkLoc" class="input h-8 w-44 py-0"><option value="">{{ tr('— Vị trí —') }}</option><option v-for="b in bins" :key="b.id" :value="b.id">{{ b.code }}</option></select>
+        <button class="btn-outline h-8 px-3" :disabled="!bulkLoc" @click="bulk('assign')">{{ tr('Gán vị trí') }}</button>
+        <button v-if="tab !== 'DONE'" class="btn-navy h-8 px-3" @click="bulk('resolve')">{{ tr('Đánh dấu đã xử lý') }}</button>
       </div>
       <p v-if="error" class="px-4 py-2 text-sm text-red-600">{{ error }}</p>
 
@@ -150,21 +151,21 @@ async function dDelete() {
         <table class="w-full min-w-[900px] text-sm">
           <thead><tr class="bg-slate-100 text-left text-sm font-bold text-slate-800">
             <th class="w-10 px-3 py-2"><input type="checkbox" :checked="allChecked" @change="toggleAll" /></th>
-            <th class="px-2 py-2">Mã tracking</th><th class="px-2 py-2">Mã vụ</th><th class="px-2 py-2">Lý do giữ</th>
-            <th class="px-2 py-2">Vị trí</th><th class="px-2 py-2">{{ tab === 'DONE' ? 'Xử lý lúc' : 'Mở lúc' }}</th><th class="w-24"></th>
+            <th class="px-2 py-2">{{ tr('Mã tracking') }}</th><th class="px-2 py-2">{{ tr('Mã vụ') }}</th><th class="px-2 py-2">{{ tr('Lý do giữ') }}</th>
+            <th class="px-2 py-2">{{ tr('Vị trí') }}</th><th class="px-2 py-2">{{ tab === 'DONE' ? tr('Xử lý lúc') : tr('Mở lúc') }}</th><th class="w-24"></th>
           </tr></thead>
           <tbody>
             <tr v-for="r in rows" :key="r.id" class="border-b border-slate-100 hover:bg-slate-50">
               <td class="px-3 py-2"><input type="checkbox" :checked="selected.has(r.id)" @change="toggle(r.id)" /></td>
               <td class="px-2 py-2"><span class="flex items-center gap-1.5 font-mono font-bold text-slate-900">{{ r.tracking_code }}
-                <button class="text-slate-500 hover:text-navy" title="Sao chép" @click="copy(r.tracking_code)"><Check v-if="copied === r.tracking_code" class="h-3.5 w-3.5 text-emerald-600" /><Copy v-else class="h-3.5 w-3.5" /></button></span></td>
+                <button class="text-slate-500 hover:text-navy" :title="tr('Sao chép')" @click="copy(r.tracking_code)"><Check v-if="copied === r.tracking_code" class="h-3.5 w-3.5 text-emerald-600" /><Copy v-else class="h-3.5 w-3.5" /></button></span></td>
               <td class="px-2 py-2 text-slate-400">{{ r.hold_code }}</td>
-              <td class="px-2 py-2">{{ r.reason }}</td>
+              <td class="px-2 py-2">{{ tr(r.reason) }}</td>
               <td class="px-2 py-2"><span v-if="r.location_code" class="rounded bg-slate-100 px-2 py-0.5 font-mono text-xs font-bold">{{ r.location_code }}</span></td>
               <td class="px-2 py-2 text-slate-700">{{ fmt(tab === 'DONE' ? r.resolved_at : r.opened_at) }}</td>
-              <td class="px-2 py-2"><button class="rounded border border-slate-300 px-3 py-1 text-sm hover:border-accent hover:text-accent" @click="openDetail(r)">Chi tiết</button></td>
+              <td class="px-2 py-2"><button class="rounded border border-slate-300 px-3 py-1 text-sm hover:border-accent hover:text-accent" @click="openDetail(r)">{{ tr('Chi tiết') }}</button></td>
             </tr>
-            <tr v-if="!rows.length"><td colspan="7" class="py-14 text-center text-slate-400">Không có kiện nào.</td></tr>
+            <tr v-if="!rows.length"><td colspan="7" class="py-14 text-center text-slate-400">{{ tr('Không có kiện nào.') }}</td></tr>
           </tbody>
         </table>
       </div>
@@ -172,46 +173,46 @@ async function dDelete() {
         <button class="btn-outline px-2 py-1" :disabled="pagination.page <= 1" @click="load(pagination.page - 1)"><ChevronLeft class="h-4 w-4" /></button>
         <span class="rounded border border-navy px-3 py-1 font-semibold text-slate-900">{{ pagination.page }}</span>
         <button class="btn-outline px-2 py-1" :disabled="pagination.page >= pagination.total_pages" @click="load(pagination.page + 1)"><ChevronRight class="h-4 w-4" /></button>
-        <select v-model.number="pagination.limit" class="input w-auto py-1.5"><option :value="20">20 / trang</option><option :value="50">50 / trang</option><option :value="100">100 / trang</option></select>
+        <select v-model.number="pagination.limit" class="input w-auto py-1.5"><option :value="20">{{ tr('20 / trang') }}</option><option :value="50">{{ tr('50 / trang') }}</option><option :value="100">{{ tr('100 / trang') }}</option></select>
       </div>
     </div>
 
     <!-- Them -->
     <div v-if="showAdd" class="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/50 p-4" @mousedown.self="showAdd = false">
       <form class="card my-8 w-full max-w-lg p-6" @submit.prevent="create">
-        <div class="mb-4 flex items-center justify-between"><h2 class="text-lg font-bold">Thêm hàng giữ</h2><button type="button" class="text-slate-400 hover:text-slate-700" @click="showAdd = false"><X class="h-5 w-5" /></button></div>
+        <div class="mb-4 flex items-center justify-between"><h2 class="text-lg font-bold">{{ tr('Thêm hàng giữ') }}</h2><button type="button" class="text-slate-400 hover:text-slate-700" @click="showAdd = false"><X class="h-5 w-5" /></button></div>
         <div class="grid gap-3">
-          <label class="block text-sm font-medium text-slate-700">Mã tracking *<input v-model="form.tracking_code" class="input mt-1 font-mono" maxlength="100" /></label>
-          <label class="block text-sm font-medium text-slate-700">Loại<select v-model="form.hold_type" class="input mt-1"><option value="WAREHOUSE">Kho giữ / Hold</option><option value="CUSTOMER">Khách yêu cầu / Block</option></select></label>
-          <label class="block text-sm font-medium text-slate-700">Lý do<select v-model="form.reason_code" class="input mt-1"><option v-for="r in REASONS" :key="r.v" :value="r.v">{{ r.label }}</option></select></label>
-          <label class="block text-sm font-medium text-slate-700">Ghi chú lý do<input v-model="form.reason" class="input mt-1" maxlength="300" /></label>
-          <label class="block text-sm font-medium text-slate-700">Vị trí kệ<select v-model="form.bin_location_id" class="input mt-1"><option value="">— Chưa có vị trí —</option><option v-for="b in bins" :key="b.id" :value="b.id">{{ b.code }}</option></select></label>
+          <label class="block text-sm font-medium text-slate-700">{{ tr('Mã tracking *') }}<input v-model="form.tracking_code" class="input mt-1 font-mono" maxlength="100" /></label>
+          <label class="block text-sm font-medium text-slate-700">{{ tr('Loại') }}<select v-model="form.hold_type" class="input mt-1"><option value="WAREHOUSE">{{ tr('Kho giữ / Hold') }}</option><option value="CUSTOMER">{{ tr('Khách yêu cầu / Block') }}</option></select></label>
+          <label class="block text-sm font-medium text-slate-700">{{ tr('Lý do') }}<select v-model="form.reason_code" class="input mt-1"><option v-for="r in REASONS" :key="r.v" :value="r.v">{{ r.label }}</option></select></label>
+          <label class="block text-sm font-medium text-slate-700">{{ tr('Ghi chú lý do') }}<input v-model="form.reason" class="input mt-1" maxlength="300" /></label>
+          <label class="block text-sm font-medium text-slate-700">{{ tr('Vị trí kệ') }}<select v-model="form.bin_location_id" class="input mt-1"><option value="">{{ tr('— Chưa có vị trí —') }}</option><option v-for="b in bins" :key="b.id" :value="b.id">{{ b.code }}</option></select></label>
         </div>
         <p v-if="formError" class="mt-3 text-sm text-red-600">{{ formError }}</p>
-        <div class="mt-5 flex justify-end gap-2"><button type="button" class="btn-outline" @click="showAdd = false">Hủy</button><button class="btn-accent">Thêm</button></div>
+        <div class="mt-5 flex justify-end gap-2"><button type="button" class="btn-outline" @click="showAdd = false">{{ tr('Hủy') }}</button><button class="btn-accent">{{ tr('Thêm') }}</button></div>
       </form>
     </div>
 
     <!-- Chi tiet -->
     <div v-if="detail" class="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/50 p-4" @mousedown.self="detail = null">
       <div class="card my-8 w-full max-w-lg p-6">
-        <div class="mb-4 flex items-center justify-between"><h2 class="text-lg font-bold">Chi tiết hàng giữ</h2><button class="text-slate-400 hover:text-slate-700" @click="detail = null"><X class="h-5 w-5" /></button></div>
+        <div class="mb-4 flex items-center justify-between"><h2 class="text-lg font-bold">{{ tr('Chi tiết hàng giữ') }}</h2><button class="text-slate-400 hover:text-slate-700" @click="detail = null"><X class="h-5 w-5" /></button></div>
         <dl class="grid grid-cols-[110px_1fr] gap-y-2 text-sm">
-          <dt class="text-slate-500">Mã tracking</dt><dd class="font-mono font-bold">{{ detail.tracking_code }}</dd>
-          <dt class="text-slate-500">Mã vụ</dt><dd class="break-all text-slate-700">{{ detail.hold_code }}</dd>
-          <dt class="text-slate-500">Loại</dt><dd>{{ detail.hold_type === 'CUSTOMER' ? 'Khách yêu cầu / Block' : 'Kho giữ / Hold' }}</dd>
-          <dt class="text-slate-500">Lý do</dt><dd>{{ detail.reason || '—' }}</dd>
-          <dt class="text-slate-500">Mở lúc</dt><dd>{{ fmt(detail.opened_at) }}</dd>
-          <dt class="text-slate-500">Trạng thái</dt><dd>{{ detail.status === 'RESOLVED' ? 'Đã xử lý lúc ' + fmt(detail.resolved_at) : 'Đang giữ' }}</dd>
-          <dt class="self-center text-slate-500">Vị trí kệ</dt>
-          <dd class="flex gap-2"><select v-model="dLoc" class="input h-9 py-0"><option value="">— Chưa có vị trí —</option><option v-for="b in bins" :key="b.id" :value="b.id">{{ b.code }}</option></select>
-            <button class="btn-outline h-9 px-3" @click="dSave({ bin_location_id: dLoc || null })">Lưu</button></dd>
+          <dt class="text-slate-500">{{ tr('Mã tracking') }}</dt><dd class="font-mono font-bold">{{ detail.tracking_code }}</dd>
+          <dt class="text-slate-500">{{ tr('Mã vụ') }}</dt><dd class="break-all text-slate-700">{{ detail.hold_code }}</dd>
+          <dt class="text-slate-500">{{ tr('Loại') }}</dt><dd>{{ detail.hold_type === 'CUSTOMER' ? tr('Khách yêu cầu / Block') : tr('Kho giữ / Hold') }}</dd>
+          <dt class="text-slate-500">{{ tr('Lý do') }}</dt><dd>{{ detail.reason ? tr(detail.reason) : "—" }}</dd>
+          <dt class="text-slate-500">{{ tr('Mở lúc') }}</dt><dd>{{ fmt(detail.opened_at) }}</dd>
+          <dt class="text-slate-500">{{ tr('Trạng thái') }}</dt><dd>{{ detail.status === 'RESOLVED' ? tr('Đã xử lý lúc ') + fmt(detail.resolved_at) : tr('Đang giữ') }}</dd>
+          <dt class="self-center text-slate-500">{{ tr('Vị trí kệ') }}</dt>
+          <dd class="flex gap-2"><select v-model="dLoc" class="input h-9 py-0"><option value="">{{ tr('— Chưa có vị trí —') }}</option><option v-for="b in bins" :key="b.id" :value="b.id">{{ b.code }}</option></select>
+            <button class="btn-outline h-9 px-3" @click="dSave({ bin_location_id: dLoc || null })">{{ tr('Lưu') }}</button></dd>
         </dl>
         <p v-if="dError" class="mt-3 text-sm text-red-600">{{ dError }}</p>
         <div class="mt-5 flex items-center justify-between">
-          <button class="btn-outline !border-red-200 !text-red-600 hover:!bg-red-50" @click="dDelete">Xóa</button>
-          <button v-if="detail.status === 'ACTIVE'" class="btn-navy" @click="dSave({ status: 'RESOLVED' })">Đánh dấu đã xử lý</button>
-          <button v-else class="btn-outline" @click="dSave({ status: 'ACTIVE' })">Mở lại</button>
+          <button class="btn-outline !border-red-200 !text-red-600 hover:!bg-red-50" @click="dDelete">{{ tr('Xóa') }}</button>
+          <button v-if="detail.status === 'ACTIVE'" class="btn-navy" @click="dSave({ status: 'RESOLVED' })">{{ tr('Đánh dấu đã xử lý') }}</button>
+          <button v-else class="btn-outline" @click="dSave({ status: 'ACTIVE' })">{{ tr('Mở lại') }}</button>
         </div>
       </div>
     </div>

@@ -72,3 +72,37 @@ exports.addDamagePhoto = asyncHandler(async (req, res) => {
   const { rows } = await db.query(`UPDATE scanned_items SET exception_status = 'DAMAGED' WHERE id = $1 RETURNING *`, [id]);
   res.status(201).json({ data: { item: rows[0], photo_url: urlPath } });
 });
+
+// POST /api/v1/receiving/sessions/:id/items/delete   body: { ids: [1,2,3] }
+// Xoa cac kien da chon trong MOT phien dang mo (vd kien nhap tay / quet thu). Xoa luon anh + cac dong quet tem
+// cua kien do (neu khong, cac tracking se bi coi la "dang cho" va dinh vao kien ke tiep). Tinh lai scanned_count.
+exports.deleteItems = asyncHandler(async (req, res) => {
+  const sessionId = parseId(req.params.id);
+  const ids = Array.isArray(req.body && req.body.ids) ? [...new Set(req.body.ids.map((x) => Number(x)))] : [];
+  if (!ids.length || ids.length > 500 || ids.some((x) => !Number.isInteger(x) || x <= 0)) {
+    throw new HttpError(400, 'ids phải là danh sách 1–500 số nguyên', 'INVALID_IDS');
+  }
+  const client = await db.getClient();
+  let files = [];
+  try {
+    await client.query('BEGIN');
+    const s = await client.query('SELECT status FROM receiving_sessions WHERE id = $1 FOR UPDATE', [sessionId]);
+    if (!s.rows.length) throw new HttpError(404, 'Không tìm thấy phiên', 'SESSION_NOT_FOUND');
+    if (s.rows[0].status !== 'OPEN') throw new HttpError(409, 'Phiên đã đóng, không thể xoá kiện', 'SESSION_CLOSED');
+    const own = (await client.query('SELECT id FROM scanned_items WHERE session_id = $1 AND id = ANY($2::bigint[])', [sessionId, ids])).rows.map((r) => r.id);
+    if (!own.length) throw new HttpError(404, 'Không tìm thấy kiện nào để xoá trong phiên này', 'ITEM_NOT_FOUND');
+    files = (await client.query('SELECT file_path FROM item_photos WHERE item_id = ANY($1::bigint[])', [own])).rows.map((r) => r.file_path);
+    await client.query('DELETE FROM label_scans WHERE item_id = ANY($1::bigint[])', [own]);
+    await client.query('DELETE FROM scanned_items WHERE id = ANY($1::bigint[])', [own]);
+    const up = await client.query(
+      `UPDATE receiving_sessions SET scanned_count = (SELECT COUNT(*) FROM scanned_items WHERE session_id = $1) WHERE id = $1 RETURNING scanned_count`, [sessionId]);
+    await client.query('COMMIT');
+    for (const f of files) { try { fs.unlinkSync(path.join(UPLOAD_DIR, path.basename(f))); } catch (e) { /* file da mat thi bo qua */ } }
+    res.json({ data: { deleted: own.length, deleted_ids: own, scanned_count: up.rows[0].scanned_count } });
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+});

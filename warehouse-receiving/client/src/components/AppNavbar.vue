@@ -1,22 +1,23 @@
 <script setup>
+import { tr, lang, setLang } from '../i18n';
 import { ref, onMounted, onBeforeUnmount } from 'vue';
 import { useRoute } from 'vue-router';
 import { Boxes, ChevronDown, Globe } from 'lucide-vue-next';
 
 // Tab co "children" se thanh menu tha xuong. Tab "Nhan hang" active ca khi dang o man hinh quet.
 const tabs = [
-  { label: 'Nhận hàng', match: '/receiving', children: [
-    { label: 'Phiên nhận hàng', to: '/receiving/sessions' },
-    { label: 'Hàng đang giữ', to: '/receiving/detained' },
-    { label: 'Vị trí kệ', to: '/receiving/bin-locations' },
-    { label: 'Định dạng mã tracking', to: '/receiving/tracking-formats' },
+  { get label() { return tr('Nhận hàng') }, match: '/receiving', children: [
+    { get label() { return tr('Phiên nhận hàng') }, to: '/receiving/sessions' },
+    { get label() { return tr('Hàng đang giữ') }, to: '/receiving/detained' },
+    { get label() { return tr('Vị trí kệ') }, to: '/receiving/bin-locations' },
+    { get label() { return tr('Định dạng mã tracking') }, to: '/receiving/tracking-formats' },
   ] },
-  { label: 'Danh sách mặt hàng', to: '/items', match: '/items' },
-  { label: 'Chuyến bay', match: '/flights', children: [
-    { label: 'Quản lý chuyến bay', to: '/flights' },
-    { label: 'Chờ vào box', to: '/flights/waiting' },
+  { get label() { return tr('Danh sách mặt hàng') }, to: '/items', match: '/items' },
+  { get label() { return tr('Chuyến bay') }, match: '/flights', children: [
+    { get label() { return tr('Quản lý chuyến bay') }, to: '/flights' },
+    { get label() { return tr('Chờ vào box') }, to: '/flights/waiting' },
   ] },
-  { label: 'Báo cáo tracking', to: '/reports', match: '/reports' },
+  { get label() { return tr('Báo cáo tracking') }, to: '/reports', match: '/reports' },
 ];
 const route = useRoute();
 const isActive = (t) => route.path.startsWith(t.match);
@@ -72,12 +73,16 @@ onBeforeUnmount(() => document.removeEventListener('click', onDoc));
 
       <!-- User -->
       <div class="ml-auto flex items-center gap-5 text-sm">
-        <span class="flex items-center gap-1.5 text-slate-300"><Globe class="h-4 w-4" /> Tiếng Việt</span>
+        <div class="flex items-center gap-1.5 text-slate-300" :title="tr('Ngôn ngữ')">
+          <Globe class="h-4 w-4" />
+          <button type="button" class="rounded px-1.5 py-0.5 text-xs font-bold transition" :class="lang === 'vi' ? 'bg-accent text-white' : 'text-slate-300 hover:bg-white/10'" @click="setLang('vi')">VI</button>
+          <button type="button" class="rounded px-1.5 py-0.5 text-xs font-bold transition" :class="lang === 'en' ? 'bg-accent text-white' : 'text-slate-300 hover:bg-white/10'" @click="setLang('en')">EN</button>
+        </div>
         <div class="flex items-center gap-2.5">
           <div class="flex h-8 w-8 items-center justify-center rounded-full bg-accent text-xs font-bold">N1</div>
           <div class="leading-tight">
             <div class="font-semibold">Nhan vien 01</div>
-            <div class="flex items-center gap-1.5 text-xs text-emerald-400"><span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>Đang hoạt động</div>
+            <div class="flex items-center gap-1.5 text-xs text-emerald-400"><span class="h-1.5 w-1.5 rounded-full bg-emerald-400"></span>{{ tr('Đang hoạt động') }}</div>
           </div>
         </div>
       </div>

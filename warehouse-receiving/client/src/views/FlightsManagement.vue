@@ -1,4 +1,5 @@
 <script setup>
+import { tr } from '../i18n';
 import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { Search, Plus, X, Eye, XCircle, ChevronDown, ChevronRight, ChevronLeft, Minus, SlidersHorizontal, LayoutGrid, Package, Plane, ArrowRight } from 'lucide-vue-next';
 import { api } from '../api';
@@ -11,17 +12,17 @@ const AIRLINES = [
   { code: 'CATHAY_PACIFIC', name: 'Cathay Pacific' },
   { code: 'ANA', name: 'All Nippon Airways' },
 ];
-const MODES = [{ v: 'INFORMAL', label: 'Tiểu ngạch' }, { v: 'FORMAL', label: 'Chính ngạch' }];
+const MODES = [{ v: 'INFORMAL', get label() { return tr('Tiểu ngạch') } }, { v: 'FORMAL', get label() { return tr('Chính ngạch') } }];
 const STATUS = {
-  OPEN: { label: 'Đang mở (Gom hàng)', cls: 'border-sky-400 bg-sky-50 text-sky-700' },
-  ARRIVED: { label: 'Đã đến VN', cls: 'border-emerald-400 bg-emerald-50 text-emerald-700' },
-  CLOSED: { label: 'Đã đóng chuyến', cls: 'border-slate-300 bg-slate-100 text-slate-600' },
+  OPEN: { get label() { return tr('Đang mở (Gom hàng)') }, cls: 'border-sky-400 bg-sky-50 text-sky-700' },
+  ARRIVED: { get label() { return tr('Đã đến VN') }, cls: 'border-emerald-400 bg-emerald-50 text-emerald-700' },
+  CLOSED: { get label() { return tr('Đã đóng chuyến') }, cls: 'border-slate-300 bg-slate-100 text-slate-600' },
 };
-const DATE_FIELDS = [{ v: 'created', label: 'Ngày tạo' }, { v: 'etd', label: 'ETD' }, { v: 'eta', label: 'ETA' }];
+const DATE_FIELDS = [{ v: 'created', get label() { return tr('Ngày tạo') } }, { v: 'etd', label: 'ETD' }, { v: 'eta', label: 'ETA' }];
 const tabs = [
-  { v: 'ALL', label: 'Tất cả', key: 'all', icon: LayoutGrid },
-  { v: 'OPEN', label: 'Đang gom', key: 'open', icon: Package },
-  { v: 'CLOSED', label: 'Đã đóng chuyến', key: 'closed', icon: Plane },
+  { v: 'ALL', get label() { return tr('Tất cả') }, key: 'all', icon: LayoutGrid },
+  { v: 'OPEN', get label() { return tr('Đang gom') }, key: 'open', icon: Package },
+  { v: 'CLOSED', get label() { return tr('Đã đóng chuyến') }, key: 'closed', icon: Plane },
 ];
 
 // ---------- Danh sach + bo loc ----------
@@ -84,7 +85,7 @@ function openEdit(r) {
 }
 async function save() {
   formError.value = '';
-  if (!form.name.trim()) { formError.value = 'Vui lòng nhập tên chuyến bay'; return; }
+  if (!form.name.trim()) { formError.value = tr('Vui lòng nhập tên chuyến bay'); return; }
   const al = AIRLINES.find((a) => a.code === form.airline_code);
   const body = { ...form, airline_name: al?.name || null, airline_code: form.airline_code || null, etd: form.etd || null, eta: form.eta || null };
   saving.value = true;
@@ -94,7 +95,7 @@ async function save() {
   } catch (e) { formError.value = e.message; } finally { saving.value = false; }
 }
 async function removeFlight() {
-  if (!confirm('Xóa chuyến bay này?')) return;
+  if (!confirm(tr('Xóa chuyến bay này?'))) return;
   try { await api.deleteFlight(editingId.value); showForm.value = false; await load(pagination.value.page); }
   catch (e) { formError.value = e.message; }
 }
@@ -112,10 +113,10 @@ async function confirmClose() {
   <div>
     <div class="mb-5 flex flex-wrap items-start justify-between gap-3">
       <div>
-        <h1 class="border-l-4 border-navy pl-3 text-2xl font-extrabold text-slate-900">Quản lý chuyến bay</h1>
-        <p class="mt-1 text-sm text-slate-500">Theo dõi chuyến bay gom hàng, chứng từ và trạng thái vận chuyển từ lúc gom kiện đến khi hàng về Việt Nam.</p>
+        <h1 class="border-l-4 border-navy pl-3 text-2xl font-extrabold text-slate-900">{{ tr('Quản lý chuyến bay') }}</h1>
+        <p class="mt-1 text-sm text-slate-500">{{ tr('Theo dõi chuyến bay gom hàng, chứng từ và trạng thái vận chuyển từ lúc gom kiện đến khi hàng về Việt Nam.') }}</p>
       </div>
-      <button class="btn-navy" @click="openAdd"><Plus class="h-4 w-4" /> Tạo chuyến bay mới</button>
+      <button class="btn-navy" @click="openAdd"><Plus class="h-4 w-4" /> {{ tr('Tạo chuyến bay mới') }}</button>
     </div>
 
     <!-- Tab trang thai -->
@@ -130,55 +131,55 @@ async function confirmClose() {
 
     <!-- Loc va tim kiem -->
     <div class="card mb-4 p-5">
-      <h2 class="mb-3 text-base font-bold text-slate-900">Lọc và Tìm kiếm</h2>
+      <h2 class="mb-3 text-base font-bold text-slate-900">{{ tr('Lọc và Tìm kiếm') }}</h2>
       <div class="flex flex-wrap items-center gap-2">
         <div class="flex">
-          <input v-model="filter.search" class="input h-10 w-52 rounded-r-none" placeholder="Tên chuyến hoặc MA…" @keyup.enter="apply" />
-          <button class="btn-outline h-10 rounded-l-none border-l-0 px-3" title="Tìm kiếm" @click="apply"><Search class="h-4 w-4" /></button>
+          <input v-model="filter.search" class="input h-10 w-52 rounded-r-none" :placeholder="tr('Tên chuyến hoặc MA…')" @keyup.enter="apply" />
+          <button class="btn-outline h-10 rounded-l-none border-l-0 px-3" :title="tr('Tìm kiếm')" @click="apply"><Search class="h-4 w-4" /></button>
         </div>
         <div class="relative">
           <select v-model="filter.airline" class="input h-10 w-40 cursor-pointer appearance-none pr-8" :class="{ 'text-slate-400': !filter.airline }">
-            <option value="">Hãng hàng không</option>
+            <option value="">{{ tr('Hãng hàng không') }}</option>
             <option v-for="a in AIRLINES" :key="a.code" :value="a.code" class="text-slate-800">{{ a.name }}</option>
           </select>
           <ChevronDown class="pointer-events-none absolute right-2.5 top-3 h-4 w-4 text-slate-400" />
         </div>
         <div class="relative">
           <select v-model="filter.mode" class="input h-10 w-32 cursor-pointer appearance-none pr-8" :class="{ 'text-slate-400': !filter.mode }">
-            <option value="">Hình thức</option>
+            <option value="">{{ tr('Hình thức') }}</option>
             <option v-for="m in MODES" :key="m.v" :value="m.v" class="text-slate-800">{{ m.label }}</option>
           </select>
           <ChevronDown class="pointer-events-none absolute right-2.5 top-3 h-4 w-4 text-slate-400" />
         </div>
         <div class="relative">
           <select v-model="filter.date_field" class="input h-10 w-36 cursor-pointer appearance-none pr-8" :class="{ 'text-slate-400': !filter.date_field }">
-            <option value="">Loại ngày</option>
+            <option value="">{{ tr('Loại ngày') }}</option>
             <option v-for="d in DATE_FIELDS" :key="d.v" :value="d.v" class="text-slate-800">{{ d.label }}</option>
           </select>
           <ChevronDown class="pointer-events-none absolute right-2.5 top-3 h-4 w-4 text-slate-400" />
         </div>
         <div class="flex h-10 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-sm">
-          <input v-model="filter.from" type="date" class="w-[7.6rem] bg-transparent outline-none" title="Ngày bắt đầu" />
+          <input v-model="filter.from" type="date" class="w-[7.6rem] bg-transparent outline-none" :title="tr('Ngày bắt đầu')" />
           <ArrowRight class="h-3.5 w-3.5 text-slate-400" />
-          <input v-model="filter.to" type="date" class="w-[7.6rem] bg-transparent outline-none" title="Ngày kết thúc" />
+          <input v-model="filter.to" type="date" class="w-[7.6rem] bg-transparent outline-none" :title="tr('Ngày kết thúc')" />
         </div>
         <button class="btn-outline h-10" :class="{ '!border-accent !text-accent': showAdvanced }" @click="showAdvanced = !showAdvanced">
-          <SlidersHorizontal class="h-4 w-4" /> Bộ lọc nâng cao
+          <SlidersHorizontal class="h-4 w-4" /> {{ tr('Bộ lọc nâng cao') }}
         </button>
-        <button class="btn-outline h-10" @click="clearFilter">Xoá lọc</button>
+        <button class="btn-outline h-10" @click="clearFilter">{{ tr('Xoá lọc') }}</button>
       </div>
 
       <div v-if="showAdvanced" class="mt-3 flex flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
-        <input v-model="filter.origin" class="input h-10 w-48 uppercase" maxlength="10" placeholder="Sân bay đi (PDX)" @keyup.enter="apply" />
-        <input v-model="filter.destination" class="input h-10 w-52 uppercase" maxlength="10" placeholder="Sân bay đến (HAN)" @keyup.enter="apply" />
+        <input v-model="filter.origin" class="input h-10 w-48 uppercase" maxlength="10" :placeholder="tr('Sân bay đi (PDX)')" @keyup.enter="apply" />
+        <input v-model="filter.destination" class="input h-10 w-52 uppercase" maxlength="10" :placeholder="tr('Sân bay đến (HAN)')" @keyup.enter="apply" />
         <div class="relative">
           <select v-model="filter.status" class="input h-10 w-52 cursor-pointer appearance-none pr-8" :class="{ 'text-slate-400': !filter.status }">
-            <option value="">Trạng thái</option>
+            <option value="">{{ tr('Trạng thái') }}</option>
             <option v-for="(s, k) in STATUS" :key="k" :value="k" class="text-slate-800">{{ s.label }}</option>
           </select>
           <ChevronDown class="pointer-events-none absolute right-2.5 top-3 h-4 w-4 text-slate-400" />
         </div>
-        <button class="btn-accent h-10" @click="apply">Áp dụng</button>
+        <button class="btn-accent h-10" @click="apply">{{ tr('Áp dụng') }}</button>
       </div>
     </div>
 
@@ -191,13 +192,13 @@ async function confirmClose() {
           <thead>
             <tr class="bg-navy text-center text-xs font-bold text-white">
               <th class="w-12 px-2 py-3"></th>
-              <th class="px-3 py-3">Chuyến bay / MAWB</th>
-              <th class="px-3 py-3">Tuyến / Hình thức</th>
-              <th class="px-3 py-3">Trạng thái</th>
+              <th class="px-3 py-3">{{ tr('Chuyến bay / MAWB') }}</th>
+              <th class="px-3 py-3">{{ tr('Tuyến / Hình thức') }}</th>
+              <th class="px-3 py-3">{{ tr('Trạng thái') }}</th>
               <th class="px-3 py-3">ETD / ETA</th>
-              <th class="w-28 px-3 py-3">Thùng / HAWB</th>
-              <th class="w-36 px-3 py-3">Ngày tạo</th>
-              <th class="w-28 px-3 py-3">Thao tác</th>
+              <th class="w-28 px-3 py-3">{{ tr('Thùng / HAWB') }}</th>
+              <th class="w-36 px-3 py-3">{{ tr('Ngày tạo') }}</th>
+              <th class="w-28 px-3 py-3">{{ tr('Thao tác') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -205,7 +206,7 @@ async function confirmClose() {
               <tr class="border-b border-slate-100 text-center align-middle hover:bg-slate-50/70">
                 <td class="px-2 py-4">
                   <button class="flex h-6 w-6 items-center justify-center rounded border border-slate-300 text-slate-600 hover:border-accent hover:text-accent"
-                    :title="expanded.has(r.id) ? 'Thu gọn' : 'Mở rộng'" @click="toggleRow(r.id)">
+                    :title="expanded.has(r.id) ? tr('Thu gọn') : tr('Mở rộng')" @click="toggleRow(r.id)">
                     <Minus v-if="expanded.has(r.id)" class="h-3.5 w-3.5" /><Plus v-else class="h-3.5 w-3.5" />
                   </button>
                 </td>
@@ -230,8 +231,8 @@ async function confirmClose() {
                 <td class="px-3 py-4 text-slate-700">{{ fmt(r.created_at) }}</td>
                 <td class="px-3 py-4">
                   <div class="flex items-center justify-center gap-3">
-                    <button class="text-navy hover:text-accent" title="Xem / sửa" @click="openEdit(r)"><Eye class="h-5 w-5" /></button>
-                    <button v-if="r.status === 'OPEN'" class="text-slate-700 hover:text-red-600" title="Đóng chuyến" @click="closeError = ''; closing = r"><XCircle class="h-5 w-5" /></button>
+                    <button class="text-navy hover:text-accent" :title="tr('Xem / sửa')" @click="openEdit(r)"><Eye class="h-5 w-5" /></button>
+                    <button v-if="r.status === 'OPEN'" class="text-slate-700 hover:text-red-600" :title="tr('Đóng chuyến')" @click="closeError = ''; closing = r"><XCircle class="h-5 w-5" /></button>
                   </div>
                 </td>
               </tr>
@@ -239,18 +240,18 @@ async function confirmClose() {
                 <td></td>
                 <td colspan="7" class="px-3 py-4">
                   <div class="grid gap-x-8 gap-y-2 text-sm sm:grid-cols-2 lg:grid-cols-4">
-                    <div><span class="text-slate-500">Hãng bay:</span> <b>{{ r.airline_name || '—' }}</b></div>
-                    <div><span class="text-slate-500">Tuyến:</span> <b>{{ r.origin || '—' }} → {{ r.destination || '—' }}</b></div>
-                    <div><span class="text-slate-500">Số thùng:</span> <b>{{ r.box_count }}</b></div>
-                    <div><span class="text-slate-500">Số HAWB:</span> <b>{{ r.hawb_count }}</b></div>
-                    <div class="sm:col-span-2 lg:col-span-4"><span class="text-slate-500">Ghi chú:</span> {{ r.note || '—' }}</div>
+                    <div><span class="text-slate-500">{{ tr('Hãng bay:') }}</span> <b>{{ r.airline_name || '—' }}</b></div>
+                    <div><span class="text-slate-500">{{ tr('Tuyến:') }}</span> <b>{{ r.origin || '—' }} → {{ r.destination || '—' }}</b></div>
+                    <div><span class="text-slate-500">{{ tr('Số thùng:') }}</span> <b>{{ r.box_count }}</b></div>
+                    <div><span class="text-slate-500">{{ tr('Số HAWB:') }}</span> <b>{{ r.hawb_count }}</b></div>
+                    <div class="sm:col-span-2 lg:col-span-4"><span class="text-slate-500">{{ tr('Ghi chú:') }}</span> {{ r.note || '—' }}</div>
                   </div>
                 </td>
               </tr>
             </template>
             <tr v-if="!rows.length">
               <td colspan="8" class="px-4 py-16 text-center text-slate-400">
-                {{ loading ? 'Đang tải…' : 'Chưa có chuyến bay nào. Bấm “Tạo chuyến bay mới” để thêm.' }}
+                {{ loading ? tr('Đang tải…') : tr('Chưa có chuyến bay nào. Bấm “Tạo chuyến bay mới” để thêm.') }}
               </td>
             </tr>
           </tbody>
@@ -259,11 +260,11 @@ async function confirmClose() {
 
       <!-- Phan trang -->
       <div class="flex flex-wrap items-center justify-end gap-3 border-t border-slate-200 px-4 py-3 text-sm text-slate-600">
-        <span>Tổng {{ pagination.total }} chuyến bay</span>
+        <span>{{ tr('Tổng {0} chuyến bay', pagination.total) }}</span>
         <button class="btn-outline px-2 py-1" :disabled="pagination.page <= 1" @click="load(pagination.page - 1)"><ChevronLeft class="h-4 w-4" /></button>
         <span class="rounded border border-navy px-3 py-1 font-semibold text-slate-900">{{ pagination.page }}</span>
         <button class="btn-outline px-2 py-1" :disabled="pagination.page >= pagination.total_pages" @click="load(pagination.page + 1)"><ChevronRight class="h-4 w-4" /></button>
-        <select v-model.number="pagination.limit" class="input w-auto py-1.5"><option :value="20">20 / trang</option><option :value="50">50 / trang</option><option :value="100">100 / trang</option></select>
+        <select v-model.number="pagination.limit" class="input w-auto py-1.5"><option :value="20">{{ tr('20 / trang') }}</option><option :value="50">{{ tr('50 / trang') }}</option><option :value="100">{{ tr('100 / trang') }}</option></select>
       </div>
     </div>
 
@@ -271,54 +272,54 @@ async function confirmClose() {
     <div v-if="showForm" class="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/50 p-4" @mousedown.self="showForm = false">
       <form class="card my-8 w-full max-w-2xl p-6" @submit.prevent="save">
         <div class="mb-4 flex items-center justify-between">
-          <h2 class="text-lg font-bold text-slate-900">{{ editingId ? 'Chi tiết chuyến bay' : 'Tạo chuyến bay mới' }}</h2>
+          <h2 class="text-lg font-bold text-slate-900">{{ editingId ? tr('Chi tiết chuyến bay') : tr('Tạo chuyến bay mới') }}</h2>
           <button type="button" class="text-slate-400 hover:text-slate-700" @click="showForm = false"><X class="h-5 w-5" /></button>
         </div>
         <div class="grid gap-4 sm:grid-cols-2">
-          <label class="block text-sm font-medium text-slate-700 sm:col-span-2">Tên chuyến bay *
-            <input v-model="form.name" class="input mt-1" maxlength="200" placeholder="VD: HONGPHAT-8899-HAN" />
+          <label class="block text-sm font-medium text-slate-700 sm:col-span-2">{{ tr('Tên chuyến bay *') }}
+            <input v-model="form.name" class="input mt-1" maxlength="200" :placeholder="tr('VD: HONGPHAT-8899-HAN')" />
           </label>
           <label class="block text-sm font-medium text-slate-700">MAWB
             <input v-model="form.mawb" class="input mt-1 font-mono" maxlength="50" placeholder="695-57531977" />
           </label>
-          <label class="block text-sm font-medium text-slate-700">Hãng hàng không
-            <select v-model="form.airline_code" class="input mt-1"><option value="">— Chọn —</option><option v-for="a in AIRLINES" :key="a.code" :value="a.code">{{ a.name }}</option></select>
+          <label class="block text-sm font-medium text-slate-700">{{ tr('Hãng hàng không') }}
+            <select v-model="form.airline_code" class="input mt-1"><option value="">{{ tr('— Chọn —') }}</option><option v-for="a in AIRLINES" :key="a.code" :value="a.code">{{ a.name }}</option></select>
           </label>
-          <label class="block text-sm font-medium text-slate-700">Sân bay đi
+          <label class="block text-sm font-medium text-slate-700">{{ tr('Sân bay đi') }}
             <input v-model="form.origin" class="input mt-1 uppercase" maxlength="10" placeholder="PDX" />
           </label>
-          <label class="block text-sm font-medium text-slate-700">Sân bay đến
+          <label class="block text-sm font-medium text-slate-700">{{ tr('Sân bay đến') }}
             <input v-model="form.destination" class="input mt-1 uppercase" maxlength="10" placeholder="HAN" />
           </label>
-          <label class="block text-sm font-medium text-slate-700">Hình thức
+          <label class="block text-sm font-medium text-slate-700">{{ tr('Hình thức') }}
             <select v-model="form.transport_mode" class="input mt-1"><option v-for="m in MODES" :key="m.v" :value="m.v">{{ m.label }}</option></select>
           </label>
-          <label v-if="editingId" class="block text-sm font-medium text-slate-700">Trạng thái
+          <label v-if="editingId" class="block text-sm font-medium text-slate-700">{{ tr('Trạng thái') }}
             <select v-model="form.status" class="input mt-1" disabled><option v-for="(s, k) in STATUS" :key="k" :value="k">{{ s.label }}</option></select>
           </label>
-          <label class="block text-sm font-medium text-slate-700">ETD (dự kiến khởi hành)
+          <label class="block text-sm font-medium text-slate-700">{{ tr('ETD (dự kiến khởi hành)') }}
             <input v-model="form.etd" type="datetime-local" class="input mt-1" />
           </label>
-          <label class="block text-sm font-medium text-slate-700">ETA (dự kiến đến)
+          <label class="block text-sm font-medium text-slate-700">{{ tr('ETA (dự kiến đến)') }}
             <input v-model="form.eta" type="datetime-local" class="input mt-1" />
           </label>
-          <label class="block text-sm font-medium text-slate-700">Số thùng
+          <label class="block text-sm font-medium text-slate-700">{{ tr('Số thùng') }}
             <input v-model.number="form.box_count" type="number" min="0" class="input mt-1" />
           </label>
-          <label class="block text-sm font-medium text-slate-700">Số HAWB
+          <label class="block text-sm font-medium text-slate-700">{{ tr('Số HAWB') }}
             <input v-model.number="form.hawb_count" type="number" min="0" class="input mt-1" />
           </label>
-          <label class="block text-sm font-medium text-slate-700 sm:col-span-2">Ghi chú
+          <label class="block text-sm font-medium text-slate-700 sm:col-span-2">{{ tr('Ghi chú') }}
             <textarea v-model="form.note" rows="2" maxlength="500" class="input mt-1"></textarea>
           </label>
         </div>
         <p v-if="formError" class="mt-3 text-sm text-red-600">{{ formError }}</p>
         <div class="mt-5 flex items-center justify-between gap-2">
-          <button v-if="editingId" type="button" class="btn-outline !border-red-200 !text-red-600 hover:!bg-red-50" @click="removeFlight">Xóa chuyến</button>
+          <button v-if="editingId" type="button" class="btn-outline !border-red-200 !text-red-600 hover:!bg-red-50" @click="removeFlight">{{ tr('Xóa chuyến') }}</button>
           <span v-else></span>
           <div class="flex gap-2">
-            <button type="button" class="btn-outline" @click="showForm = false">Hủy</button>
-            <button class="btn-accent" :disabled="saving">{{ saving ? 'Đang lưu…' : editingId ? 'Lưu thay đổi' : 'Tạo chuyến bay' }}</button>
+            <button type="button" class="btn-outline" @click="showForm = false">{{ tr('Hủy') }}</button>
+            <button class="btn-accent" :disabled="saving">{{ saving ? tr('Đang lưu…') : editingId ? tr('Lưu thay đổi') : tr('Tạo chuyến bay') }}</button>
           </div>
         </div>
       </form>
@@ -327,12 +328,12 @@ async function confirmClose() {
     <!-- Xac nhan dong chuyen -->
     <div v-if="closing" class="fixed inset-0 z-40 flex items-center justify-center bg-black/50 p-4" @mousedown.self="closing = null">
       <div class="card w-full max-w-md p-6">
-        <h2 class="text-lg font-bold text-slate-900">Đóng chuyến bay?</h2>
-        <p class="mt-2 text-sm text-slate-600">Chuyến <b>{{ closing.name }}</b> sẽ chuyển sang “Đã đóng chuyến” và không gom thêm hàng.</p>
+        <h2 class="text-lg font-bold text-slate-900">{{ tr('Đóng chuyến bay?') }}</h2>
+        <p class="mt-2 text-sm text-slate-600">{{ tr('Chuyến') }} <b>{{ closing.name }}</b> {{ tr('sẽ chuyển sang “Đã đóng chuyến” và không gom thêm hàng.') }}</p>
         <p v-if="closeError" class="mt-2 text-sm text-red-600">{{ closeError }}</p>
         <div class="mt-5 flex justify-end gap-2">
-          <button class="btn-outline" @click="closing = null">Hủy</button>
-          <button class="btn-navy" @click="confirmClose">Đóng chuyến</button>
+          <button class="btn-outline" @click="closing = null">{{ tr('Hủy') }}</button>
+          <button class="btn-navy" @click="confirmClose">{{ tr('Đóng chuyến') }}</button>
         </div>
       </div>
     </div>

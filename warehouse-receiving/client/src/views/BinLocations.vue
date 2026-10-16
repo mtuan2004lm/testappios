@@ -1,11 +1,12 @@
 <script setup>
+import { tr } from '../i18n';
 import { ref, reactive, computed, onMounted, watch } from 'vue';
 import { ArrowLeft, Search, Plus, LayoutGrid, Pencil, Trash2, X } from 'lucide-vue-next';
 import { api } from '../api';
 
 const PARTS = [
-  { k: 'zone', label: 'Khu' }, { k: 'subzone', label: 'Tiểu khu' }, { k: 'aisle', label: 'Lối' },
-  { k: 'rack', label: 'Giá' }, { k: 'level', label: 'Tầng' }, { k: 'cell', label: 'Ô' },
+  { k: 'zone', get label() { return tr('Khu') } }, { k: 'subzone', get label() { return tr('Tiểu khu') } }, { k: 'aisle', get label() { return tr('Lối') } },
+  { k: 'rack', get label() { return tr('Giá') } }, { k: 'level', get label() { return tr('Tầng') } }, { k: 'cell', get label() { return tr('Ô') } },
 ];
 const rows = ref([]);
 const total = ref(0);
@@ -65,12 +66,12 @@ async function add() {
   formError.value = ''; msg.value = ''; saving.value = true;
   try {
     if (mode.value === 'one') {
-      await api.createBin({ ...form }); msg.value = `Đã thêm vị trí ${previewCode.value}`;
+      await api.createBin({ ...form }); msg.value = tr('Đã thêm vị trí {0}', previewCode.value);
     } else {
-      if (!combos.value.length) throw new Error('Điền ít nhất một ô');
-      if (combos.value.length > 1000) throw new Error('Tối đa 1000 vị trí mỗi lần');
+      if (!combos.value.length) throw new Error(tr('Điền ít nhất một ô'));
+      if (combos.value.length > 1000) throw new Error(tr('Tối đa 1000 vị trí mỗi lần'));
       const r = await api.bulkBins(combos.value.map((o) => ({ ...o, alias: '' })));
-      msg.value = `Đã thêm ${r.data.created} vị trí${r.data.skipped ? `, bỏ qua ${r.data.skipped} mã đã tồn tại` : ''}`;
+      msg.value = tr('Đã thêm {0} vị trí', r.data.created) + (r.data.skipped ? tr(', bỏ qua {0} mã đã tồn tại', r.data.skipped) : '');
     }
     Object.assign(form, blank()); await load();
   } catch (e) { formError.value = e.message; } finally { saving.value = false; }
@@ -85,28 +86,28 @@ async function saveEdit() {
   try { await api.updateBin(editing.value.id, { ...eform }); editing.value = null; await load(); } catch (e) { eError.value = e.message; }
 }
 async function remove(r) {
-  if (!confirm(`Xóa vị trí ${r.code}? Hàng đang giữ ở vị trí này sẽ thành “chưa có vị trí”.`)) return;
+  if (!confirm(tr('Xóa vị trí {0}? Hàng đang giữ ở vị trí này sẽ thành “chưa có vị trí”.', r.code))) return;
   try { await api.deleteBin(r.id); await load(); } catch (e) { error.value = e.message; }
 }
 </script>
 
 <template>
   <div>
-    <RouterLink to="/receiving/sessions" class="btn-outline mb-4 !border-navy !text-navy"><span class="flex h-5 w-5 items-center justify-center rounded bg-navy text-white"><ArrowLeft class="h-3.5 w-3.5" /></span> Quay lại · Phiên nhận hàng</RouterLink>
-    <h1 class="border-l-4 border-navy pl-3 text-2xl font-extrabold text-slate-900">Vị trí kệ</h1>
-    <p class="mt-1 mb-4 text-sm text-slate-500">Các vị trí kệ tại Hub Oregon, dùng để ghi chỗ đặt hàng đang giữ và hàng bị chặn.</p>
+    <RouterLink to="/receiving/sessions" class="btn-outline mb-4 !border-navy !text-navy"><span class="flex h-5 w-5 items-center justify-center rounded bg-navy text-white"><ArrowLeft class="h-3.5 w-3.5" /></span> {{ tr('Quay lại · Phiên nhận hàng') }}</RouterLink>
+    <h1 class="border-l-4 border-navy pl-3 text-2xl font-extrabold text-slate-900">{{ tr('Vị trí kệ') }}</h1>
+    <p class="mt-1 mb-4 text-sm text-slate-500">{{ tr('Các vị trí kệ tại Hub Oregon, dùng để ghi chỗ đặt hàng đang giữ và hàng bị chặn.') }}</p>
 
     <div class="grid items-start gap-4 lg:grid-cols-[1fr_620px]">
       <!-- Danh sach -->
       <div class="card p-4">
         <div class="mb-3 flex items-center justify-between gap-3">
-          <div class="relative w-72"><Search class="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><input v-model="search" class="input pl-9" placeholder="Tìm mã vị trí hoặc tên gọi…" /></div>
-          <span class="text-xs text-slate-500">Hiển thị {{ rows.length }}/{{ total }} vị trí</span>
+          <div class="relative w-72"><Search class="absolute left-3 top-2.5 h-4 w-4 text-slate-400" /><input v-model="search" class="input pl-9" :placeholder="tr('Tìm mã vị trí hoặc tên gọi…')" /></div>
+          <span class="text-xs text-slate-500">{{ tr('Hiển thị {0}/{1} vị trí', rows.length, total) }}</span>
         </div>
         <p v-if="error" class="mb-2 text-sm text-red-600">{{ error }}</p>
         <table class="w-full text-sm">
           <thead><tr class="bg-slate-100 text-left text-xs font-bold text-slate-700">
-            <th class="px-2.5 py-2">Mã vị trí</th><th class="px-2.5 py-2">Tên gọi</th><th class="px-2.5 py-2">Chi tiết</th><th class="px-2.5 py-2">Ngày tạo</th><th class="w-20"></th>
+            <th class="px-2.5 py-2">{{ tr('Mã vị trí') }}</th><th class="px-2.5 py-2">{{ tr('Tên gọi') }}</th><th class="px-2.5 py-2">{{ tr('Chi tiết') }}</th><th class="px-2.5 py-2">{{ tr('Ngày tạo') }}</th><th class="w-20"></th>
           </tr></thead>
           <tbody>
             <tr v-for="r in rows" :key="r.id" class="border-b border-slate-100">
@@ -115,11 +116,11 @@ async function remove(r) {
               <td class="px-2.5 py-2.5 text-xs text-slate-400">{{ detail(r) }}</td>
               <td class="whitespace-nowrap px-2.5 py-2.5 text-slate-700">{{ fmt(r.created_at) }}</td>
               <td class="px-2.5 py-2.5"><div class="flex justify-end gap-3">
-                <button class="text-slate-700 hover:text-accent" title="Sửa" @click="openEdit(r)"><Pencil class="h-4 w-4" /></button>
-                <button class="text-red-500 hover:text-red-700" title="Xóa" @click="remove(r)"><Trash2 class="h-4 w-4" /></button>
+                <button class="text-slate-700 hover:text-accent" :title="tr('Sửa')" @click="openEdit(r)"><Pencil class="h-4 w-4" /></button>
+                <button class="text-red-500 hover:text-red-700" :title="tr('Xóa')" @click="remove(r)"><Trash2 class="h-4 w-4" /></button>
               </div></td>
             </tr>
-            <tr v-if="!rows.length"><td colspan="5" class="py-12 text-center text-slate-400">Chưa có vị trí nào. Thêm vị trí ở khung bên phải.</td></tr>
+            <tr v-if="!rows.length"><td colspan="5" class="py-12 text-center text-slate-400">{{ tr('Chưa có vị trí nào. Thêm vị trí ở khung bên phải.') }}</td></tr>
           </tbody>
         </table>
       </div>
@@ -127,12 +128,12 @@ async function remove(r) {
       <!-- Them -->
       <form class="card p-4" @submit.prevent="add">
         <div class="mb-3 grid grid-cols-2 gap-1 rounded-lg bg-slate-100 p-1 text-sm font-medium">
-          <button type="button" class="flex items-center justify-center gap-2 rounded-md py-2" :class="mode === 'one' ? 'bg-white shadow-sm' : 'text-slate-600'" @click="mode = 'one'"><Plus class="h-4 w-4" /> Thêm vị trí</button>
-          <button type="button" class="flex items-center justify-center gap-2 rounded-md py-2" :class="mode === 'many' ? 'bg-white shadow-sm' : 'text-slate-600'" @click="mode = 'many'"><LayoutGrid class="h-4 w-4" /> Thêm nhiều vị trí</button>
+          <button type="button" class="flex items-center justify-center gap-2 rounded-md py-2" :class="mode === 'one' ? 'bg-white shadow-sm' : 'text-slate-600'" @click="mode = 'one'"><Plus class="h-4 w-4" /> {{ tr('Thêm vị trí') }}</button>
+          <button type="button" class="flex items-center justify-center gap-2 rounded-md py-2" :class="mode === 'many' ? 'bg-white shadow-sm' : 'text-slate-600'" @click="mode = 'many'"><LayoutGrid class="h-4 w-4" /> {{ tr('Thêm nhiều vị trí') }}</button>
         </div>
         <div class="mb-3 rounded border border-dashed border-slate-300 px-3 py-2 text-xs text-slate-500">
-          <template v-if="mode === 'one'">Mã vị trí do hệ thống tự sinh từ các cấp đã điền<template v-if="previewCode">: <b class="font-mono text-slate-900">{{ previewCode }}</b></template></template>
-          <template v-else>Mỗi ô nhập được khoảng hoặc danh sách, ví dụ <b>01-05</b>, <b>A-C</b>, <b>1,3,5</b>. Hệ thống tạo mọi tổ hợp<template v-if="combos.length">: <b class="text-slate-900">{{ combos.length > 1000 ? '>1000' : combos.length }} vị trí</b> (vd {{ comboCode(combos[0]) }}<template v-if="combos.length > 1"> … {{ comboCode(combos[Math.min(combos.length, 1000) - 1]) }}</template>)</template>.</template>
+          <template v-if="mode === 'one'">{{ tr('Mã vị trí do hệ thống tự sinh từ các cấp đã điền') }}<template v-if="previewCode">: <b class="font-mono text-slate-900">{{ previewCode }}</b></template></template>
+          <template v-else>{{ tr('Mỗi ô nhập được khoảng hoặc danh sách, ví dụ') }} <b>01-05</b>, <b>A-C</b>, <b>1,3,5</b>{{ tr('. Hệ thống tạo mọi tổ hợp') }}<template v-if="combos.length">: <b class="text-slate-900">{{ combos.length > 1000 ? '>1000' : combos.length }}{{ ' ' + tr('vị trí') }}</b> ({{ tr('vd') }} {{ comboCode(combos[0]) }}<template v-if="combos.length > 1"> … {{ comboCode(combos[Math.min(combos.length, 1000) - 1]) }}</template>)</template>.</template>
         </div>
         <div class="grid grid-cols-3 gap-2">
           <label v-for="p in PARTS" :key="p.k" class="flex overflow-hidden rounded border border-slate-300 bg-white text-sm focus-within:border-accent">
@@ -141,26 +142,26 @@ async function remove(r) {
           </label>
         </div>
         <label v-if="mode === 'one'" class="mt-2 flex overflow-hidden rounded border border-slate-300 bg-white text-sm focus-within:border-accent">
-          <span class="shrink-0 whitespace-nowrap bg-slate-100 px-2.5 py-2 text-slate-700">Tên gọi</span><input v-model="form.alias" class="w-full px-2 outline-none" maxlength="100" />
+          <span class="shrink-0 whitespace-nowrap bg-slate-100 px-2.5 py-2 text-slate-700">{{ tr('Tên gọi') }}</span><input v-model="form.alias" class="w-full px-2 outline-none" maxlength="100" />
         </label>
-        <p class="mt-2 text-xs text-slate-500">Điền ít nhất một ô. Mã vị trí được ghép tự động từ những ô bạn điền: Khu A + Giá 01 + Tầng 1 sẽ thành A-01-1.</p>
+        <p class="mt-2 text-xs text-slate-500">{{ tr('Điền ít nhất một ô. Mã vị trí được ghép tự động từ những ô bạn điền: Khu A + Giá 01 + Tầng 1 sẽ thành A-01-1.') }}</p>
         <p v-if="formError" class="mt-2 text-sm text-red-600">{{ formError }}</p>
         <p v-if="msg" class="mt-2 text-sm text-emerald-600">{{ msg }}</p>
-        <div class="mt-3 flex justify-end"><button class="btn-accent" :disabled="saving">{{ saving ? 'Đang lưu…' : 'Thêm' }}</button></div>
+        <div class="mt-3 flex justify-end"><button class="btn-accent" :disabled="saving">{{ saving ? tr('Đang lưu…') : tr('Thêm') }}</button></div>
       </form>
     </div>
 
     <!-- Sua -->
     <div v-if="editing" class="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/50 p-4" @mousedown.self="editing = null">
       <form class="card my-8 w-full max-w-lg p-6" @submit.prevent="saveEdit">
-        <div class="mb-4 flex items-center justify-between"><h2 class="text-lg font-bold">Sửa vị trí <span class="font-mono">{{ editing.code }}</span></h2>
+        <div class="mb-4 flex items-center justify-between"><h2 class="text-lg font-bold">{{ tr('Sửa vị trí') }} <span class="font-mono">{{ editing.code }}</span></h2>
           <button type="button" class="text-slate-400 hover:text-slate-700" @click="editing = null"><X class="h-5 w-5" /></button></div>
         <div class="grid grid-cols-2 gap-3">
           <label v-for="p in PARTS" :key="p.k" class="block text-sm font-medium text-slate-700">{{ p.label }}<input v-model="eform[p.k]" class="input mt-1" maxlength="40" /></label>
-          <label class="col-span-2 block text-sm font-medium text-slate-700">Tên gọi<input v-model="eform.alias" class="input mt-1" maxlength="100" /></label>
+          <label class="col-span-2 block text-sm font-medium text-slate-700">{{ tr('Tên gọi') }}<input v-model="eform.alias" class="input mt-1" maxlength="100" /></label>
         </div>
         <p v-if="eError" class="mt-3 text-sm text-red-600">{{ eError }}</p>
-        <div class="mt-5 flex justify-end gap-2"><button type="button" class="btn-outline" @click="editing = null">Hủy</button><button class="btn-accent">Lưu</button></div>
+        <div class="mt-5 flex justify-end gap-2"><button type="button" class="btn-outline" @click="editing = null">{{ tr('Hủy') }}</button><button class="btn-accent">{{ tr('Lưu') }}</button></div>
       </form>
     </div>
   </div>

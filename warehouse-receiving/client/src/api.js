@@ -1,7 +1,9 @@
 // Client goi API nho gon. Loi tra ve la ApiError co .status, .code, .data
+import { trMsg, locale } from './i18n';
+
 export class ApiError extends Error {
   constructor(status, code, message, data) {
-    super(message);
+    super(trMsg(message));
     this.status = status;
     this.code = code;
     this.data = data;
@@ -23,6 +25,7 @@ export const api = {
   listSessions: (params) => request('GET', `/receiving/sessions?${new URLSearchParams(params)}`),
   createSession: (body) => request('POST', '/receiving/sessions', body),
   getSession: (id) => request('GET', `/receiving/sessions/${id}`),
+  deleteItems: (id, ids) => request('POST', `/receiving/sessions/${id}/items/delete`, { ids }),
   uploadLabelPhoto: async (itemId, file) => {
     const res = await fetch(`/api/v1/scanned-items/${itemId}/label-photo`, { method: 'POST', headers: { 'Content-Type': file.type || 'image/jpeg' }, body: file });
     const json = await res.json().catch(() => ({}));
@@ -72,5 +75,5 @@ export const api = {
   setException: (itemId, exception_status) => request('PATCH', `/scanned-items/${itemId}/exception`, { exception_status }),
 };
 
-export const fmtTime = (iso) => (iso ? new Date(iso).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—');
-export const fmtDateTime = (iso) => (iso ? new Date(iso).toLocaleString('vi-VN', { dateStyle: 'short', timeStyle: 'short' }) : '—');
+export const fmtTime = (iso) => (iso ? new Date(iso).toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : '—');
+export const fmtDateTime = (iso) => (iso ? new Date(iso).toLocaleString(locale(), { dateStyle: 'short', timeStyle: 'short' }) : '—');

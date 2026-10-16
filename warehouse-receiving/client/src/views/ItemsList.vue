@@ -1,4 +1,5 @@
 <script setup>
+import { tr } from '../i18n';
 import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { Search, Copy, Eye, ChevronLeft, ChevronRight, ChevronDown, Plus, X, ImagePlus, Trash2, Image as ImageIcon, Check } from 'lucide-vue-next';
 import { api } from '../api';
@@ -11,19 +12,19 @@ const error = ref('');
 
 const field = ref('tracking');
 const fields = [
-  { v: 'tracking', label: 'Mã tracking', ph: 'Dán nguyên mã tracking' },
-  { v: 'order', label: 'Mã đơn hàng', ph: 'Nhập mã đơn hàng' },
-  { v: 'name', label: 'Tên hàng', ph: 'Nhập tên hàng' },
-  { v: 'partner', label: 'Đối tác', ph: 'Nhập tên đối tác' },
+  { v: 'tracking', get label() { return tr('Mã tracking') }, get ph() { return tr('Dán nguyên mã tracking') } },
+  { v: 'order', get label() { return tr('Mã đơn hàng') }, get ph() { return tr('Nhập mã đơn hàng') } },
+  { v: 'name', get label() { return tr('Tên hàng') }, get ph() { return tr('Nhập tên hàng') } },
+  { v: 'partner', get label() { return tr('Đối tác') }, get ph() { return tr('Nhập tên đối tác') } },
 ];
 const placeholder = computed(() => fields.find((f) => f.v === field.value).ph);
 const keyword = ref('');
 const applied = reactive({ field: 'tracking', search: '' });
 const tab = ref('ALL');
 const tabs = [
-  { v: 'ALL', label: 'Tất cả', dot: 'bg-slate-700' },
-  { v: 'UNFILTERED', label: 'Chưa dịch lọc', dot: 'bg-blue-400' },
-  { v: 'FILTERED', label: 'Dịch lọc', dot: 'bg-emerald-400' },
+  { v: 'ALL', get label() { return tr('Tất cả') }, dot: 'bg-slate-700' },
+  { v: 'UNFILTERED', get label() { return tr('Chưa dịch lọc') }, dot: 'bg-blue-400' },
+  { v: 'FILTERED', get label() { return tr('Dịch lọc') }, dot: 'bg-emerald-400' },
 ];
 const limits = [20, 50, 100];
 
@@ -72,7 +73,7 @@ function resetImage() { imageFile.value = null; imagePreview.value = ''; removeI
 function pickImage(e) {
   const f = e.target.files?.[0]; e.target.value = '';
   if (!f) return;
-  if (!/^image\//.test(f.type)) { formError.value = 'Chỉ chọn file ảnh.'; return; }
+  if (!/^image\//.test(f.type)) { formError.value = tr('Chỉ chọn file ảnh.'); return; }
   imageFile.value = f; removeImage.value = false;
   imagePreview.value = URL.createObjectURL(f);
 }
@@ -81,8 +82,8 @@ const shownImage = computed(() => imagePreview.value || (removeImage.value ? '' 
 
 async function save() {
   formError.value = '';
-  if (!form.name.trim()) return (formError.value = 'Vui lòng nhập tên hàng.');
-  if (!form.tracking_code.trim()) return (formError.value = 'Vui lòng nhập mã tracking.');
+  if (!form.name.trim()) return (formError.value = tr('Vui lòng nhập tên hàng.'));
+  if (!form.tracking_code.trim()) return (formError.value = tr('Vui lòng nhập mã tracking.'));
   saving.value = true;
   try {
     const body = { ...form };
@@ -95,7 +96,7 @@ async function save() {
   } catch (e) { formError.value = e.message; } finally { saving.value = false; }
 }
 async function remove() {
-  if (!confirm('Xóa mặt hàng này?')) return;
+  if (!confirm(tr('Xóa mặt hàng này?'))) return;
   saving.value = true;
   try { await api.deleteProduct(editingId.value); showForm.value = false; await load(pagination.value.page); }
   catch (e) { formError.value = e.message; } finally { saving.value = false; }
@@ -105,8 +106,8 @@ async function remove() {
 <template>
   <div class="mx-auto max-w-[1400px] px-4 py-6 sm:px-6">
     <div class="mb-5 flex items-center justify-between gap-3">
-      <h1 class="border-l-4 border-navy pl-3 text-2xl font-extrabold text-slate-900">Danh sách mặt hàng</h1>
-      <button class="btn-accent" @click="openAdd"><Plus class="h-4 w-4" /> Thêm mặt hàng</button>
+      <h1 class="border-l-4 border-navy pl-3 text-2xl font-extrabold text-slate-900">{{ tr('Danh sách mặt hàng') }}</h1>
+      <button class="btn-accent" @click="openAdd"><Plus class="h-4 w-4" /> {{ tr('Thêm mặt hàng') }}</button>
     </div>
 
     <div class="card overflow-hidden">
@@ -119,8 +120,8 @@ async function remove() {
           <ChevronDown class="pointer-events-none absolute right-2.5 top-3 h-4 w-4 text-slate-400" />
         </div>
         <input v-model="keyword" :placeholder="placeholder" class="input h-10 min-w-[240px] flex-1" @keyup.enter="doSearch" />
-        <button class="btn-outline h-10 px-3" title="Tìm kiếm" @click="doSearch"><Search class="h-4 w-4" /></button>
-        <button class="btn-outline h-10" @click="clearSearch">Xóa tìm kiếm</button>
+        <button class="btn-outline h-10 px-3" :title="tr('Tìm kiếm')" @click="doSearch"><Search class="h-4 w-4" /></button>
+        <button class="btn-outline h-10" @click="clearSearch">{{ tr('Xóa tìm kiếm') }}</button>
       </div>
 
       <!-- Tab loc -->
@@ -139,12 +140,12 @@ async function remove() {
         <table class="w-full min-w-[960px] text-sm">
           <thead>
             <tr class="border-b border-slate-200 bg-slate-50 text-left text-xs font-bold uppercase tracking-wide text-slate-700">
-              <th class="w-16 px-4 py-3 text-center">STT</th>
-              <th class="w-28 px-3 py-3 text-center">Ảnh</th>
-              <th class="px-3 py-3">Tên hàng</th>
+              <th class="w-16 px-4 py-3 text-center">{{ tr('STT') }}</th>
+              <th class="w-28 px-3 py-3 text-center">{{ tr('Ảnh') }}</th>
+              <th class="px-3 py-3">{{ tr('Tên hàng') }}</th>
               <th class="w-80 px-3 py-3">Tracking</th>
-              <th class="w-64 px-3 py-3">Mã đơn hàng</th>
-              <th class="w-48 px-3 py-3">Đối tác</th>
+              <th class="w-64 px-3 py-3">{{ tr('Mã đơn hàng') }}</th>
+              <th class="w-48 px-3 py-3">{{ tr('Đối tác') }}</th>
               <th class="w-16 px-3 py-3"></th>
             </tr>
           </thead>
@@ -162,7 +163,7 @@ async function remove() {
                 <div class="mt-1.5 flex items-center justify-between gap-3">
                   <span class="rounded border px-2 py-0.5 text-xs"
                     :class="r.filter_status === 'FILTERED' ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-red-200 bg-red-50 text-red-600'">
-                    {{ r.filter_status === 'FILTERED' ? 'Dịch lọc' : 'Chưa dịch lọc' }}
+                    {{ r.filter_status === 'FILTERED' ? tr('Dịch lọc') : tr('Chưa dịch lọc') }}
                   </span>
                   <span class="rounded bg-slate-100 px-2 py-0.5 text-xs font-bold text-slate-700">SL: {{ r.quantity }}</span>
                 </div>
@@ -171,23 +172,23 @@ async function remove() {
                 <div class="flex items-center justify-between gap-2">
                   <span class="flex items-center gap-1.5 font-mono text-[15px] font-bold text-slate-900">
                     {{ r.tracking_code }}
-                    <button class="text-slate-500 hover:text-navy" title="Sao chép" @click="copy(r.tracking_code)">
+                    <button class="text-slate-500 hover:text-navy" :title="tr('Sao chép')" @click="copy(r.tracking_code)">
                       <Check v-if="copied === r.tracking_code" class="h-4 w-4 text-emerald-600" /><Copy v-else class="h-4 w-4" />
                     </button>
                   </span>
-                  <button class="text-slate-500 hover:text-navy" title="Tìm theo mã này" @click="searchBy('tracking', r.tracking_code)"><Search class="h-4 w-4" /></button>
+                  <button class="text-slate-500 hover:text-navy" :title="tr('Tìm theo mã này')" @click="searchBy('tracking', r.tracking_code)"><Search class="h-4 w-4" /></button>
                 </div>
-                <div v-if="r.alt_code || r.alt_code2" class="mt-1 text-xs text-slate-500">Mã tracking khác: {{ [r.alt_code, r.alt_code2].filter(Boolean).join(', ') }}</div>
+                <div v-if="r.alt_code || r.alt_code2" class="mt-1 text-xs text-slate-500">{{ tr('Mã tracking khác: {0}', [r.alt_code, r.alt_code2].filter(Boolean).join(', ')) }}</div>
               </td>
               <td class="px-3 py-3">
                 <div v-if="r.order_code" class="flex items-center justify-between gap-2">
                   <span class="flex items-center gap-1.5 font-mono text-[15px] font-bold text-slate-900">
                     {{ r.order_code }}
-                    <button class="text-slate-500 hover:text-navy" title="Sao chép" @click="copy(r.order_code)">
+                    <button class="text-slate-500 hover:text-navy" :title="tr('Sao chép')" @click="copy(r.order_code)">
                       <Check v-if="copied === r.order_code" class="h-4 w-4 text-emerald-600" /><Copy v-else class="h-4 w-4" />
                     </button>
                   </span>
-                  <button class="text-slate-500 hover:text-navy" title="Tìm theo mã này" @click="searchBy('order', r.order_code)"><Search class="h-4 w-4" /></button>
+                  <button class="text-slate-500 hover:text-navy" :title="tr('Tìm theo mã này')" @click="searchBy('order', r.order_code)"><Search class="h-4 w-4" /></button>
                 </div>
               </td>
               <td class="px-3 py-3">
@@ -195,11 +196,11 @@ async function remove() {
                 <div class="text-slate-400">{{ r.partner_note }}</div>
               </td>
               <td class="px-3 py-3 text-center">
-                <button class="text-navy hover:text-accent" title="Xem / sửa" @click="openEdit(r)"><Eye class="h-5 w-5" /></button>
+                <button class="text-navy hover:text-accent" :title="tr('Xem / sửa')" @click="openEdit(r)"><Eye class="h-5 w-5" /></button>
               </td>
             </tr>
             <tr v-if="!rows.length && !loading">
-              <td colspan="7" class="px-4 py-14 text-center text-slate-400">Chưa có mặt hàng nào. Bấm “Thêm mặt hàng” để nhập.</td>
+              <td colspan="7" class="px-4 py-14 text-center text-slate-400">{{ tr('Chưa có mặt hàng nào. Bấm “Thêm mặt hàng” để nhập.') }}</td>
             </tr>
           </tbody>
         </table>
@@ -207,12 +208,12 @@ async function remove() {
 
       <!-- Phan trang -->
       <div class="flex flex-wrap items-center justify-end gap-3 px-4 py-3 text-sm text-slate-700">
-        <span>Tổng {{ pagination.total }} dòng hàng</span>
+        <span>{{ tr('Tổng {0} dòng hàng', pagination.total) }}</span>
         <button class="rounded p-1 disabled:opacity-30" :disabled="pagination.page <= 1" @click="load(pagination.page - 1)"><ChevronLeft class="h-4 w-4" /></button>
         <span class="flex h-8 min-w-8 items-center justify-center rounded border border-navy px-2 font-semibold">{{ pagination.page }}</span>
         <button class="rounded p-1 disabled:opacity-30" :disabled="pagination.page >= pagination.total_pages" @click="load(pagination.page + 1)"><ChevronRight class="h-4 w-4" /></button>
         <select v-model.number="pagination.limit" class="h-8 cursor-pointer rounded border border-slate-300 bg-white px-2 text-sm">
-          <option v-for="l in limits" :key="l" :value="l">{{ l }} / trang</option>
+          <option v-for="l in limits" :key="l" :value="l">{{ tr('{0} / trang', l) }}</option>
         </select>
       </div>
     </div>
@@ -221,53 +222,53 @@ async function remove() {
     <div v-if="showForm" class="fixed inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/50 p-4" @mousedown.self="showForm = false">
       <form class="card my-8 w-full max-w-2xl p-6" @submit.prevent="save">
         <div class="mb-4 flex items-center justify-between">
-          <h2 class="text-lg font-bold text-slate-900">{{ editingId ? 'Sửa mặt hàng' : 'Thêm mặt hàng' }}</h2>
+          <h2 class="text-lg font-bold text-slate-900">{{ editingId ? tr('Sửa mặt hàng') : tr('Thêm mặt hàng') }}</h2>
           <button type="button" class="text-slate-400 hover:text-slate-700" @click="showForm = false"><X class="h-5 w-5" /></button>
         </div>
 
         <div class="grid gap-4 sm:grid-cols-2">
-          <label class="sm:col-span-2 block text-sm font-medium text-slate-700">Tên hàng *
+          <label class="sm:col-span-2 block text-sm font-medium text-slate-700">{{ tr('Tên hàng *') }}
             <input v-model="form.name" class="input mt-1" maxlength="300" />
           </label>
-          <label class="block text-sm font-medium text-slate-700">Số lượng (SL)
+          <label class="block text-sm font-medium text-slate-700">{{ tr('Số lượng (SL)') }}
             <input v-model.number="form.quantity" type="number" min="1" class="input mt-1" />
           </label>
-          <label class="block text-sm font-medium text-slate-700">Trạng thái
+          <label class="block text-sm font-medium text-slate-700">{{ tr('Trạng thái') }}
             <select v-model="form.filter_status" class="input mt-1">
-              <option value="UNFILTERED">Chưa dịch lọc</option>
-              <option value="FILTERED">Dịch lọc</option>
+              <option value="UNFILTERED">{{ tr('Chưa dịch lọc') }}</option>
+              <option value="FILTERED">{{ tr('Dịch lọc') }}</option>
             </select>
           </label>
           <label class="block text-sm font-medium text-slate-700">Tracking *
             <input v-model="form.tracking_code" class="input mt-1 font-mono" maxlength="100" />
           </label>
-          <label class="block text-sm font-medium text-slate-700">Mã tracking khác (1)
+          <label class="block text-sm font-medium text-slate-700">{{ tr('Mã tracking khác (1)') }}
             <input v-model="form.alt_code" class="input mt-1 font-mono" maxlength="100" />
           </label>
-          <label class="block text-sm font-medium text-slate-700">Mã tracking khác (2)
+          <label class="block text-sm font-medium text-slate-700">{{ tr('Mã tracking khác (2)') }}
             <input v-model="form.alt_code2" class="input mt-1 font-mono" maxlength="100" />
           </label>
-          <label class="block text-sm font-medium text-slate-700">Mã đơn hàng
+          <label class="block text-sm font-medium text-slate-700">{{ tr('Mã đơn hàng') }}
             <input v-model="form.order_code" class="input mt-1 font-mono" maxlength="100" />
           </label>
-          <label class="block text-sm font-medium text-slate-700">Đối tác
+          <label class="block text-sm font-medium text-slate-700">{{ tr('Đối tác') }}
             <input v-model="form.partner_name" class="input mt-1" maxlength="100" />
           </label>
-          <label class="block text-sm font-medium text-slate-700">Ghi chú đối tác
+          <label class="block text-sm font-medium text-slate-700">{{ tr('Ghi chú đối tác') }}
             <input v-model="form.partner_note" class="input mt-1" maxlength="200" />
           </label>
 
           <div class="sm:col-span-2">
-            <div class="mb-1 text-sm font-medium text-slate-700">Ảnh</div>
+            <div class="mb-1 text-sm font-medium text-slate-700">{{ tr('Ảnh') }}</div>
             <div class="flex items-center gap-3">
               <div class="flex h-[72px] w-[72px] items-center justify-center overflow-hidden rounded border border-slate-200 bg-slate-50">
                 <img v-if="shownImage" :src="shownImage" class="h-full w-full object-contain" alt="" />
                 <ImageIcon v-else class="h-7 w-7 text-slate-300" />
               </div>
-              <label class="btn-outline cursor-pointer"><ImagePlus class="h-4 w-4" /> Chọn ảnh
+              <label class="btn-outline cursor-pointer"><ImagePlus class="h-4 w-4" /> {{ tr('Chọn ảnh') }}
                 <input type="file" accept="image/*" class="hidden" @change="pickImage" />
               </label>
-              <button v-if="shownImage" type="button" class="text-sm text-red-600 hover:underline" @click="dropImage">Bỏ ảnh</button>
+              <button v-if="shownImage" type="button" class="text-sm text-red-600 hover:underline" @click="dropImage">{{ tr('Bỏ ảnh') }}</button>
             </div>
           </div>
         </div>
@@ -276,12 +277,12 @@ async function remove() {
 
         <div class="mt-6 flex items-center justify-between">
           <button v-if="editingId" type="button" class="btn-outline !border-red-200 !text-red-600 hover:!bg-red-50" :disabled="saving" @click="remove">
-            <Trash2 class="h-4 w-4" /> Xóa
+            <Trash2 class="h-4 w-4" /> {{ tr('Xóa') }}
           </button>
           <span v-else></span>
           <div class="flex gap-2">
-            <button type="button" class="btn-outline" @click="showForm = false">Hủy</button>
-            <button type="submit" class="btn-accent" :disabled="saving">{{ saving ? 'Đang lưu…' : 'Lưu' }}</button>
+            <button type="button" class="btn-outline" @click="showForm = false">{{ tr('Hủy') }}</button>
+            <button type="submit" class="btn-accent" :disabled="saving">{{ saving ? tr('Đang lưu…') : tr('Lưu') }}</button>
           </div>
         </div>
       </form>

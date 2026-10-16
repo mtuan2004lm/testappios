@@ -86,6 +86,21 @@
 
 ## 4. Lịch sử thay đổi (mới nhất ở trên)
 
+### 2026-10-15 · ⭐ Web: chọn và xoá kiện đã quét / nhập tay
+- Màn hình quét có cột **checkbox** (chỉ khi phiên đang mở) + ô chọn tất cả; chọn xong hiện nút **"Xoá đã chọn (n)"** (có hỏi xác nhận).
+- Server: `POST /api/v1/receiving/sessions/:id/items/delete` body `{ "ids": [..] }` (`itemController.deleteItems`). 🔥 Xoá trong 1 transaction: kiện + ảnh (DB và file) + **các dòng `label_scans` của kiện đó** (nếu để lại, tracking sẽ thành "đang chờ" và dính vào kiện kế tiếp), rồi tính lại `scanned_count`.
+- Chỉ xoá được kiện của phiên **đang mở** (phiên đóng → 409 `SESSION_CLOSED`); tối đa 500 kiện/lần. Không hoàn tác được.
+- `api.js` thêm `deleteItems`; `en.js` thêm 7 câu dịch.
+- 🧪 Đã test: xoá 2/3 kiện, xoá lại kiện đã xoá (404), ids rỗng (400), phiên đóng (409), không còn `label_scans` mồ côi, giao diện VI/EN.
+
+### 2026-10-14 · ⭐ Web: đổi ngôn ngữ Tiếng Việt / English
+- Navbar có nút **VI | EN** (biểu tượng quả địa cầu). Lựa chọn lưu trong `localStorage` (khóa `lang`), tải lại trang vẫn giữ.
+- `client/src/i18n.js` (mới): `tr(key, ...args)` — khóa là **câu tiếng Việt gốc**, `{0}` là chỗ chèn biến; thiếu bản dịch thì hiện tiếng Việt. `trMsg()` dịch thông báo lỗi/cảnh báo từ server (từ điển + mẫu regex). `locale()` đổi định dạng ngày giờ vi-VN / en-US.
+- `client/src/locales/en.js` (mới): ~410 câu tiếng Anh. 🔥 Thêm chữ mới trong web → bọc `tr('...')` và thêm dòng vào `en.js`.
+- Đã bọc toàn bộ view + navbar + `api.js`. Danh sách nhãn hằng số dùng getter để đổi ngôn ngữ là cập nhật ngay.
+- Không đổi: dữ liệu người dùng nhập/DB (tên mặt hàng, mô tả định dạng tracking...). Server và app iOS không đổi.
+- 🧪 Đã test Playwright: 9 trang ở chế độ EN không còn chữ Việt (ngoài dữ liệu DB), không lỗi console.
+
 ### 2026-10-14 — ⭐🗄️🧪 Kiện NO NAME tự có ngoại lệ "Không xác định" (trước đây là "Bình thường")
 - **Vì sao:** NO NAME và "Không xác định" trước đây lưu tách riêng; kiện NO NAME mặc định ngoại lệ "Bình thường" nên không được đếm / tô đỏ như Không xác định. Chọn phương án 2: NO NAME tính là Không xác định (nhãn tím NO NAME vẫn hiện để phân biệt).
 - **Sửa (`scanController.js` → `makeItem`):** `exception_status` = `UNKNOWN` khi `noName`, ngược lại `NORMAL`. Khi sau này gán được mã kho cho kiện thì ngoại lệ tự về Bình thường (logic cũ giữ nguyên). Cần khởi động lại server.

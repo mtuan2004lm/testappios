@@ -47,6 +47,8 @@ Cách nối: iPhone và web đều gọi API qua HTTP; API đọc ghi PostgreSQL
 - Nhóm kho/khách hàng: duyệt rule regex đang bật theo `id` tăng dần, rule đầu tiên khớp (không phân biệt hoa/thường) thắng. Nếu app gửi `detected_text` (mã kho đọc từ nhãn) thì dùng nó; nếu không thì dùng mã kho đã lưu trong bảng `tracking_codes`, hoặc chính barcode.
 - Bảng `tracking_codes` (trang Báo cáo tracking) chỉ còn dùng để gợi ý mã kho, **không còn quyết định** mã xác định hay không.
 
+**Đa ngôn ngữ:** web có nút **VI | EN** trên thanh menu (`client/src/i18n.js`, bản dịch ở `client/src/locales/en.js`). Thêm chữ mới: bọc `tr('...')` và thêm vào `en.js`.
+
 ## Chạy thử
 
 1. Tạo database và cấu hình:
@@ -153,6 +155,7 @@ Nếu không có `.env`, server dùng mặc định của `pg` (user máy, datab
 | POST | `/api/v1/receiving/sessions/:id/classify` | `{barcode, detected_text}`: gán nhóm KH cho kiện đã quét (404 `ITEM_NOT_SCANNED` nếu chưa quét). Còn trong code, app hiện tại không gọi | (dự phòng) |
 | PATCH | `/api/v1/receiving/sessions/:id/finalize` | "Chốt kiện": đặt tổng kiện = số đã quét | Web |
 | PATCH | `/api/v1/receiving/sessions/:id/close` | Kết thúc phiên | Web |
+| POST | `/api/v1/receiving/sessions/:id/items/delete` | `{ids:[..]}`: xoá các kiện đã chọn (chỉ phiên đang mở; xoá cả ảnh + dòng quét tem, tính lại số kiện) | Web |
 | PATCH | `/api/v1/scanned-items/:id/toggle-business-type` | Đổi KINH_DOANH ⇄ KHONG_KINH_DOANH | Web |
 | PATCH | `/api/v1/scanned-items/:id/exception` | `{exception_status}` đánh dấu hư hỏng / giữ hàng / chặn / không xác định / bình thường | Web |
 | POST | `/api/v1/scanned-items/:id/damage-photo` | Ảnh thô `image/*` (≤10MB), gắn vào kiện, đánh dấu DAMAGED | iOS |
