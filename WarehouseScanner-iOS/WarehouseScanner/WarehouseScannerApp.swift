@@ -3,11 +3,17 @@ import SwiftUI
 @main
 struct WarehouseScannerApp: App {
     @StateObject private var store = AppStore()
+    @StateObject private var auth = AuthStore()
+    @StateObject private var lang = LangStore()
 
     var body: some Scene {
         WindowGroup {
-            RootView()
+            Group {
+                if auth.isSignedIn { RootView() } else { LoginView() }
+            }
                 .environmentObject(store)
+                .environmentObject(auth)
+                .environmentObject(lang)
                 .preferredColorScheme(.dark)
                 .tint(.accent)
         }

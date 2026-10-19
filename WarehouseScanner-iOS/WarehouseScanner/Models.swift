@@ -36,7 +36,7 @@ struct ReceivingSession: Codable, Identifiable, Hashable {
     let status: String                // OPEN | CLOSED
     let totalExpectedPackages: Int
     let scannedCount: Int
-    var title: String { "Phiên #" + String(format: "%04d", id) }
+    var title: String { tr("Phiên #") + String(format: "%04d", id) }
 }
 
 struct ScannedItem: Codable, Identifiable, Hashable {
@@ -49,6 +49,19 @@ struct ScannedItem: Codable, Identifiable, Hashable {
     let exceptionStatus: String
     let isNoName: Bool?
 }
+
+/// Một dòng trong danh sách đơn của phiên (GET /receiving/sessions/:id).
+struct SessionItem: Decodable, Identifiable, Hashable {
+    let id: FlexID
+    let barcode: String
+    let detectedWarehouseCode: String?
+    let customerGroup: String?
+    let businessType: String?
+    let exceptionStatus: String
+    let isNoName: Bool?
+}
+
+struct SessionDetail: Decodable { let session: ReceivingSession; let items: [SessionItem] }
 
 struct Pagination: Codable { let page: Int; let limit: Int; let total: Int; let totalPages: Int }
 struct ListResponse<T: Decodable>: Decodable { let data: [T]; let pagination: Pagination? }

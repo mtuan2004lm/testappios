@@ -86,6 +86,34 @@
 
 ## 4. Lịch sử thay đổi (mới nhất ở trên)
 
+### 2026-10-19 · ⭐📱 App iPhone: chi tiết phiên (cập nhật 1 giây) + đổi ngôn ngữ Việt/Anh
+- **Màn chi tiết phiên** `SessionDetailView.swift` (mới): hiện ĐÃ QUÉT / DỰ KIẾN, danh sách đơn đã quét (mã, nhóm KH, mã kho, nhãn SUCCESS / NO NAME / HỎNG / GIỮ / BLOCK / KHÔNG XÁC ĐỊNH) và nút **Bắt đầu quét** / **Tiếp tục quét** nằm riêng ở đáy. Tự hỏi server mỗi **1 giây** (GET `/receiving/sessions/:id`, cùng lệnh web dùng) nên đơn xoá/thêm/đổi trạng thái trên web hoặc máy khác hiện ngay; mất mạng thì giữ danh sách và thử lại. Nút "Kết thúc phiên" ở góc trên.
+- **Luồng mới**: danh sách phiên → (chạm phiên hoặc tạo phiên xong) → chi tiết phiên → Bắt đầu quét → màn quét → nút back về chi tiết phiên.
+- `AutoScanView.swift`: ô ĐÃ GỬI lấy số đã quét từ server mỗi 1 giây (và ngay sau mỗi lần quét), nên khớp web.
+- `APIClient.swift` (`sessionDetail`), `Models.swift` (`SessionItem`, `SessionDetail`), `SessionsView.swift` (đi vào chi tiết phiên).
+- **Đổi ngôn ngữ VI/EN**: `Localization.swift` (mới) có `tr("câu tiếng Việt")` và bảng dịch tiếng Anh (~110 câu); mọi chuỗi trong app đã bọc `tr(...)`. Công tắc **VI | EN** ở màn đăng nhập và mục *Ngôn ngữ / Language* trong ⚙️ Cài đặt; lựa chọn được nhớ (`UserDefaults` khoá `lang`), đổi là có hiệu lực ngay. Dữ liệu từ web (tên hãng, mặt hàng, nhóm KH, mô tả định dạng) không dịch. 🔥 Thêm chữ mới trong app: viết `tr("câu tiếng Việt")` rồi thêm bản tiếng Anh vào bảng `L10n.en`, nếu không sẽ hiện tiếng Việt khi chọn English. Khoá `{0}`, `{1}` là chỗ thay giá trị.
+- `AppStore.swift`: đổi dấu bản build (⚙️ → Bản app: "giao diện quét mới + tạo/kết thúc phiên + VI/EN"). Sửa: `project.pbxproj` thêm `SessionDetailView.swift`, `Localization.swift`.
+- Server/web không đổi. Chưa build thử (sandbox không có Swift). Bản cũ để quay lại: `WarehouseScanner-iOS/_old/*.before-i18n`.
+
+### 2026-10-19 · ⭐📱 App iPhone: tạo phiên, dừng quét (chốt kiện), kết thúc phiên
+- `NewSessionView.swift` (mới): form giống web "Bắt đầu phiên mới" (đơn vị vận chuyển, cửa kho, người giao, biển số, số kiện); mở từ nút ➕ ở danh sách phiên, tạo xong vào quét ngay.
+- `AutoScanView.swift`: nút ⋯ ở hàng dưới → "Dừng quét (chốt kiện)" (PATCH `/finalize`, dừng camera, màn "ĐÃ DỪNG QUÉT" có Tiếp tục quét / Kết thúc phiên) và "Kết thúc phiên" (PATCH `/close`, rồi về danh sách). Cả hai đều hỏi xác nhận.
+- `APIClient.swift`: thêm `createSession`, `finalizeSession`, `closeSession`. `SessionsView.swift`: nút ➕. `project.pbxproj`: thêm `NewSessionView.swift`.
+- Server không đổi. Bản cũ để quay lại: `WarehouseScanner-iOS/_old/*.before-sessions`.
+
+### 2026-10-19 · ⭐📱 App iPhone: giao diện quét mới (chung cho iPhone Pro và Pro Max)
+- `AutoScanView.swift`: ô **ĐÃ GỬI** to ở trên cùng, thẻ SUCCESS/FAIL/... ngay dưới nó (chừa sẵn chỗ cao 200 để khung quét không nhảy), khung quét co giãn ở giữa, hàng dưới: nút quay lại + BỎ QUA + FAIL (nhỏ), rồi hàng nút đèn pin / Ảnh label / Hỏng / danh sách. Bỏ dòng "Quét lần lượt tracking…" và thanh tiêu đề trên cùng (nút quay lại giờ ở dưới).
+- 🔥 Mã tracking/mã kho không rớt dòng: `lineLimit(1)` + `minimumScaleFactor(0.5)`; mã dài hơn 40 ký tự thì cắt phần giữa. Không dùng kích thước pixel cố định nên Pro (393) và Pro Max (440) cùng bố cục.
+- `Extensions.swift` (Reticle): khung quét điền đầy vùng giữa.
+- Bản cũ để quay lại: `WarehouseScanner-iOS/_old/AutoScanView.swift.before-newui`, `Extensions.swift.before-newui`.
+
+### 2026-10-19 · ⭐📱 App iPhone: thêm màn hình đăng nhập (bản thử, chưa nối API công ty)
+- File mới: `LoginView.swift` (giao diện đăng nhập), `AuthStore.swift` (trạng thái đăng nhập; chỉ nhớ email + cờ đã đăng nhập, **không lưu mật khẩu**).
+- Sửa: `WarehouseScannerApp.swift` (chưa đăng nhập → LoginView), `SettingsView.swift` (mục Tài khoản + Đăng xuất), `project.pbxproj` (thêm 2 file).
+- Sửa lỗi build: `AuthStore.init` đọc `userEmail` trước khi khởi tạo xong ("used before being initialized") → dùng biến tạm `saved`.
+- Bản thử: chỉ cần bấm "Đăng nhập" là vào, không bắt nhập email/mật khẩu (bỏ trống → tài khoản "Khách (bản thử)"). Khi nối API phải bật lại kiểm tra ô trống.
+- 🔥 `AuthService.signIn` hiện không kiểm tra gì, cho vào luôn. Khi nối API công ty, thay thân hàm này bằng POST `/auth/login` và lưu token vào Keychain.
+
 ### 2026-10-15 · ⭐ Web: chọn và xoá kiện đã quét / nhập tay
 - Màn hình quét có cột **checkbox** (chỉ khi phiên đang mở) + ô chọn tất cả; chọn xong hiện nút **"Xoá đã chọn (n)"** (có hỏi xác nhận).
 - Server: `POST /api/v1/receiving/sessions/:id/items/delete` body `{ "ids": [..] }` (`itemController.deleteItems`). 🔥 Xoá trong 1 transaction: kiện + ảnh (DB và file) + **các dòng `label_scans` của kiện đó** (nếu để lại, tracking sẽ thành "đang chờ" và dính vào kiện kế tiếp), rồi tính lại `scanned_count`.

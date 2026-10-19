@@ -22,8 +22,8 @@ struct Reticle: View {
     /// Rộng gần hết màn hình (trước đây cố định 320x200) để đặt vừa cả mã vạch lẫn dòng mã kho.
     var body: some View {
         GeometryReader { geo in
-            let w = max(geo.size.width - 24, 200)
-            let h = min(w * 0.8, geo.size.height * 0.55)
+            let w = max(geo.size.width - 32, 200)
+            let h = max(min(geo.size.height - 8, w * 1.4), 120)
             ZStack {
                 RoundedRectangle(cornerRadius: 20)
                     .stroke(active ? Color.accent : Color.white.opacity(0.7), style: StrokeStyle(lineWidth: 3, dash: [18, 10]))
@@ -41,12 +41,13 @@ struct Reticle: View {
 }
 
 struct PermissionDenied: View {
+    @EnvironmentObject var lang: LangStore   // đổi ngôn ngữ thì làm mới màn hình
     var body: some View {
         VStack(spacing: 12) {
             Image(systemName: "camera.fill").font(.largeTitle)
-            Text("Chưa có quyền dùng camera").font(.headline)
-            Text("Vào Cài đặt > Kho Scanner > bật Camera.").font(.footnote).multilineTextAlignment(.center)
-            Button("Mở Cài đặt") { if let u = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(u) } }
+            Text(tr("Chưa có quyền dùng camera")).font(.headline)
+            Text(tr("Vào Cài đặt > Kho Scanner > bật Camera.")).font(.footnote).multilineTextAlignment(.center)
+            Button(tr("Mở Cài đặt")) { if let u = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(u) } }
                 .buttonStyle(.borderedProminent)
         }
         .padding(24).frame(maxWidth: .infinity, maxHeight: .infinity).background(Color.navy)
@@ -55,6 +56,7 @@ struct PermissionDenied: View {
 }
 
 struct HistorySheet: View {
+    @EnvironmentObject var lang: LangStore   // đổi ngôn ngữ thì làm mới màn hình
     let entries: [ScanEntry]
     var body: some View {
         NavigationStack {
@@ -67,14 +69,14 @@ struct HistorySheet: View {
                     }
                     Spacer()
                     VStack(alignment: .trailing, spacing: 2) {
-                        Text(e.group ?? "Bỏ qua").font(.subheadline.bold())
+                        Text(e.group ?? tr("Bỏ qua")).font(.subheadline.bold())
                             .foregroundStyle(e.status == .sent ? Color.okGreen : Color.unknownGray)
                         Text(e.time, style: .time).font(.caption2).foregroundStyle(.secondary)
                     }
                 }
             }
-            .overlay { if entries.isEmpty { Text("Chưa quét nhãn nào").foregroundStyle(.secondary) } }
-            .navigationTitle("Lịch sử quét")
+            .overlay { if entries.isEmpty { Text(tr("Chưa quét nhãn nào")).foregroundStyle(.secondary) } }
+            .navigationTitle(tr("Lịch sử quét"))
             .navigationBarTitleDisplayMode(.inline)
         }
         .presentationDetents([.medium, .large])

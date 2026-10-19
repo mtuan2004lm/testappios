@@ -19,7 +19,7 @@ struct APIClient {
         var base = baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
         while base.hasSuffix("/") { base.removeLast() }
         guard let url = URL(string: base + path) else {
-            throw APIError(status: 0, code: "BAD_URL", message: "Địa chỉ server không hợp lệ")
+            throw APIError(status: 0, code: "BAD_URL", message: tr("Địa chỉ server không hợp lệ"))
         }
         return url
     }
@@ -45,12 +45,12 @@ struct APIClient {
             //  -1003 không tìm thấy tên máy · -1022 bị chặn http (ATS) · -1200/-1202 lỗi chứng chỉ https
             let ns = error as NSError
             throw APIError(status: 0, code: "NETWORK",
-                           message: "Không kết nối được tới \(baseURL)\nLỗi: \(error.localizedDescription) (mã \(ns.code))")
+                           message: tr("Không kết nối được tới {0}\nLỗi: {1} (mã {2})", baseURL, error.localizedDescription, ns.code))
         }
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         guard (200..<300).contains(status) else {
             let env = try? Self.decoder.decode(ErrorEnvelope.self, from: data)
-            throw APIError(status: status, code: env?.error?.code, message: env?.error?.message ?? "Lỗi server (\(status))")
+            throw APIError(status: status, code: env?.error?.code, message: tr(env?.error?.message ?? tr("Lỗi server ({0})", status)))
         }
         return try Self.decoder.decode(T.self, from: data)
     }
@@ -70,6 +70,34 @@ struct APIClient {
 
     func openSessions() async throws -> [ReceivingSession] {
         let r: ListResponse<ReceivingSession> = try await perform("GET", "/api/v1/receiving/sessions?status=OPEN&limit=50")
+        return r.data
+    }
+
+    /// Chi tiết phiên + danh sách đơn đã quét (web gọi lệnh này mỗi 1 giây).
+    func sessionDetail(id: Int) async throws -> SessionDetail {
+        let r: ObjectResponse<SessionDetail> = try await perform("GET", "/api/v1/receiving/sessions/\(id)", timeout: 4)
+        return r.data
+    }
+
+    /// Tạo phiên mới (giống web "Bắt đầu phiên mới").
+    func createSession(carrier: String, gate: String, driver: String, plate: String, expected: Int) async throws -> ReceivingSession {
+        var body: [String: Any] = ["carrier_name": carrier, "total_expected_packages": expected]
+        if !gate.trimmingCharacters(in: .whitespaces).isEmpty { body["gate_code"] = gate }
+        if !driver.trimmingCharacters(in: .whitespaces).isEmpty { body["driver_name"] = driver }
+        if !plate.trimmingCharacters(in: .whitespaces).isEmpty { body["license_plate"] = plate }
+        let r: ObjectResponse<ReceivingSession> = try await perform("POST", "/api/v1/receiving/sessions", json: body, timeout: 8)
+        return r.data
+    }
+
+    /// "Chốt kiện": chốt số kiện dự kiến = số đã quét (web: nút "Chốt kiện - END CODE").
+    func finalizeSession(id: Int) async throws -> ReceivingSession {
+        let r: ObjectResponse<ReceivingSession> = try await perform("PATCH", "/api/v1/receiving/sessions/\(id)/finalize", timeout: 8)
+        return r.data
+    }
+
+    /// Kết thúc phiên: sau đó không quét thêm được.
+    func closeSession(id: Int) async throws -> ReceivingSession {
+        let r: ObjectResponse<ReceivingSession> = try await perform("PATCH", "/api/v1/receiving/sessions/\(id)/close", timeout: 8)
         return r.data
     }
 

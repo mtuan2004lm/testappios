@@ -224,7 +224,7 @@ Nếu không có `.env`, server dùng mặc định của `pg` (user máy, datab
 
 ## App iPhone
 
-Xem `../WarehouseScanner-iOS/README.md`. Tóm tắt: iPhone chỉ làm máy quét; phiên tạo trên web; mỗi nhãn quét một lần lấy cả mã vạch + mã kho (OCR) và tự gửi về `/scan`; app hiển thị nhãn thuộc kho nào, và thẻ cam **KHÔNG XÁC ĐỊNH** nếu mã không có trong Danh sách mặt hàng. Nếu iPhone không nối được server: cùng Wi-Fi, cho phép *Local Network*, hoặc dùng `cloudflared tunnel --url http://localhost:3000` rồi nhập địa chỉ https vào ⚙️ trong app.
+Xem `../WarehouseScanner-iOS/README.md`. Tóm tắt: iPhone làm máy quét; phiên có thể tạo trên web **hoặc ngay trên app (nút ➕)**; app có màn hình đăng nhập (bản thử), **màn chi tiết phiên tự cập nhật mỗi 1 giây như web**, và **đổi ngôn ngữ Việt/Anh** (công tắc VI|EN ở đăng nhập và ⚙️), nút ⋯ để **Dừng quét (chốt kiện)** và **Kết thúc phiên** (19/10/2026); mỗi nhãn quét một lần lấy cả mã vạch + mã kho (OCR) và tự gửi về `/scan`; app hiển thị nhãn thuộc kho nào, và thẻ cam **KHÔNG XÁC ĐỊNH** nếu mã không có trong Danh sách mặt hàng. Nếu iPhone không nối được server: cùng Wi-Fi, cho phép *Local Network*, hoặc dùng `cloudflared tunnel --url http://localhost:3000` rồi nhập địa chỉ https vào ⚙️ trong app.
 
 ## Lịch sử cập nhật
 

@@ -142,11 +142,11 @@ final class AutoScanViewModel: ObservableObject {
                     lastDupAt[code] = now
                     Task { await send(code: code, text: code, group: "") }          // server trả 409 -> hiện MÃ TRÙNG, web tăng bộ đếm
                 } else if !hasNew {
-                    showHint("Tem này đã quét rồi — đưa ra khỏi khung rồi đưa lại để báo trùng")
+                    showHint(tr("Tem này đã quét rồi — đưa ra khỏi khung rồi đưa lại để báo trùng"))
                 }
                 continue
             }
-            if let f = failCooldown[code], now.timeIntervalSince(f) < 8 { showHint("Tem này vừa báo lỗi — đợi vài giây rồi đưa lại"); continue }   // vừa báo FAIL, đừng báo lặp
+            if let f = failCooldown[code], now.timeIntervalSince(f) < 8 { showHint(tr("Tem này vừa báo lỗi — đợi vài giây rồi đưa lại")); continue }   // vừa báo FAIL, đừng báo lặp
             if let t = cooldown[code], now.timeIntervalSince(t) < 1.5 { continue }
 
             // Chụp khung hình ngay khi thấy mã vạch lần đầu (lúc này tem đang nằm trong khung, rõ nhất)
@@ -253,8 +253,8 @@ final class AutoScanViewModel: ObservableObject {
     private func reportFail(text: String, group: String) {
         failCooldown[text] = Date()
         failed += 1
-        entries.insert(ScanEntry(barcode: "—", warehouseText: text, group: group, status: .noBarcode, note: "Không đọc được mã vạch"), at: 0)
-        last = LastResult(barcode: "", group: group, warehouseText: text, message: "Không đọc được mã vạch", failed: true)
+        entries.insert(ScanEntry(barcode: "—", warehouseText: text, group: group, status: .noBarcode, note: tr("Không đọc được mã vạch")), at: 0)
+        last = LastResult(barcode: "", group: group, warehouseText: text, message: tr("Không đọc được mã vạch"), failed: true)
         Haptics.warning()
         AudioServicesPlaySystemSound(1053)
         Task { try? await api?.scanFail(sessionId: session.id, detectedText: text) }   // báo FAIL lên web (nếu mất mạng thì bỏ qua)
@@ -289,7 +289,7 @@ final class AutoScanViewModel: ObservableObject {
                 if let d = await shotTask?.value { pendingShots.append(d); if pendingShots.count > 4 { pendingShots.removeFirst() } }
                 let needEnd = data.needEndCode == true
                 if needEnd { endRequired = true }
-                let msg = needEnd ? "Đủ 3 tracking — quét QR END CODE" : "Tracking \(seq)/3 chưa có thông tin"
+                let msg = needEnd ? tr("Đủ 3 tracking — quét QR END CODE") : tr("Tracking {0}/3 chưa có thông tin", seq)
                 entries.insert(ScanEntry(barcode: code, warehouseText: (text.isEmpty || text == code) ? nil : text, status: .tracked, note: msg), at: 0)
                 last = LastResult(barcode: code, group: nil, warehouseText: nil, message: msg, track: seq)
                 Haptics.warning()
@@ -321,21 +321,21 @@ final class AutoScanViewModel: ObservableObject {
                 for x in extras { done.remove(x) }
                 endRequired = true
                 pendingTracks = 3
-                last = LastResult(barcode: code, group: nil, warehouseText: nil, message: "Bắt buộc quét QR END CODE", endBlocked: true)
+                last = LastResult(barcode: code, group: nil, warehouseText: nil, message: tr("Bắt buộc quét QR END CODE"), endBlocked: true)
                 Haptics.warning()
                 AudioServicesPlaySystemSound(1053)
                 return
             }
             if e.code == "NO_PENDING_TRACKS" {
-                banner = "Chưa có tracking nào đang chờ — không cần END CODE"
+                banner = tr("Chưa có tracking nào đang chờ — không cần END CODE")
                 endRequired = false; pendingTracks = 0       // server không còn tem nào đang chờ -> gỡ pop-up chặn
                 Task { try? await Task.sleep(nanoseconds: 3_000_000_000); banner = nil }
                 return
             }
             if e.isDuplicate {
                 skipped += 1
-                entries.insert(ScanEntry(barcode: code, warehouseText: text == code ? nil : text, status: .duplicate, note: "Đã quét trước đó"), at: 0)
-                last = LastResult(barcode: code, group: nil, warehouseText: nil, message: "Mã đã quét trong phiên", duplicate: true)
+                entries.insert(ScanEntry(barcode: code, warehouseText: text == code ? nil : text, status: .duplicate, note: tr("Đã quét trước đó")), at: 0)
+                last = LastResult(barcode: code, group: nil, warehouseText: nil, message: tr("Mã đã quét trong phiên"), duplicate: true)
                 Haptics.warning()
                 AudioServicesPlaySystemSound(1053)
             } else if e.isNetwork {
@@ -399,9 +399,9 @@ final class AutoScanViewModel: ObservableObject {
         guard let api, let jpeg = image.resized(maxSide: 1600).jpegData(compressionQuality: 0.7) else { return }
         do {
             _ = try await api.uploadLabelPhoto(itemId: item.id, jpeg: jpeg)
-            banner = "Đã gửi ảnh label cho \(item.barcode)"
+            banner = tr("Đã gửi ảnh label cho {0}", item.barcode)
         } catch {
-            banner = "Gửi ảnh label thất bại: \(error.localizedDescription)"
+            banner = tr("Gửi ảnh label thất bại: {0}", error.localizedDescription)
         }
         try? await Task.sleep(nanoseconds: 3_000_000_000)
         banner = nil
@@ -413,9 +413,9 @@ final class AutoScanViewModel: ObservableObject {
         guard let api, let jpeg = image.resized(maxSide: 1600).jpegData(compressionQuality: 0.7) else { return }
         do {
             _ = try await api.uploadDamagePhoto(itemId: item.id, jpeg: jpeg)
-            banner = "Đã gửi ảnh hỏng cho \(item.barcode)"
+            banner = tr("Đã gửi ảnh hỏng cho {0}", item.barcode)
         } catch {
-            banner = "Gửi ảnh thất bại: \(error.localizedDescription)"
+            banner = tr("Gửi ảnh thất bại: {0}", error.localizedDescription)
         }
         try? await Task.sleep(nanoseconds: 3_000_000_000)
         banner = nil

@@ -36,7 +36,11 @@ Cách B (thủ công): Xcode → New Project → iOS App (SwiftUI, tên `Warehou
 |---|---|
 | `CameraEngine.swift` | Camera liên tục: barcode (AVFoundation) + OCR (Vision, chạy liên tục, tự lấy nét lại khi kẹt) |
 | `AutoScanViewModel.swift` | Gom mã vạch + mã kho trong cửa sổ 1 giây, gửi nền, bỏ qua nhãn lỗi, tự gửi lại |
-| `AutoScanView.swift` | Màn hình quét: hiện kho của nhãn vừa quét |
+| `AutoScanView.swift` | Màn hình quét: ĐÃ GỬI to + thẻ kết quả + khung quét; nút ⋯ Dừng quét (chốt kiện) / Kết thúc phiên |
+| `NewSessionView.swift` | Tạo phiên mới (giống web) |
+| `SessionDetailView.swift` | Chi tiết phiên: danh sách đơn đã quét (tự cập nhật mỗi 1 giây) + nút Bắt đầu quét |
+| `Localization.swift` | Đổi ngôn ngữ Việt/Anh: hàm `tr("...")` + bảng dịch `L10n.en` |
+| `LoginView.swift`, `AuthStore.swift` | Màn hình đăng nhập (bản thử, chưa nối API công ty) |
 | `RuleMatcher.swift` | Khớp regex như server + sửa lỗi OCR (`_` bị mất, `0`/`O`) |
 | `APIClient.swift` | Gọi API web |
 
