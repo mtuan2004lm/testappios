@@ -1,6 +1,6 @@
 <script setup>
 import { tr } from '../i18n';
-import { ref, reactive, watch, onMounted } from 'vue';
+import { ref, reactive, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useRouter } from 'vue-router';
 import { Plus, ScanLine, ChevronLeft, ChevronRight, X, Truck, Eye } from 'lucide-vue-next';
 import { api, fmtDateTime } from '../api';
@@ -16,9 +16,8 @@ const pagination = ref({ page: 1, limit: 10, total: 0, total_pages: 1 });
 const loading = ref(false);
 const error = ref('');
 
-async function load(page = 1) {
-  loading.value = true;
-  error.value = '';
+async function load(page = 1, silent = false) {
+  if (!silent) { loading.value = true; error.value = ''; }
   try {
     const params = { page, limit: pagination.value.limit };
     for (const k of Object.keys(filters)) if (filters[k]) params[k] = filters[k];
@@ -26,13 +25,16 @@ async function load(page = 1) {
     sessions.value = res.data;
     pagination.value = res.pagination;
   } catch (e) {
-    error.value = e.message;
+    if (!silent) error.value = e.message;
   } finally {
-    loading.value = false;
+    if (!silent) loading.value = false;
   }
 }
 watch(filters, () => load(1)); // doi bo loc -> ve trang 1
-onMounted(() => load());
+// Tu dong cap nhat moi 1.5 giay (an, khong nhay man hinh) de thay ngay phien do app iPhone tao / ket thuc
+let poll = null;
+onMounted(() => { load(); poll = setInterval(() => load(pagination.value.page, true), 1500); });
+onBeforeUnmount(() => clearInterval(poll));
 
 // ---- Modal tao phien moi ----
 const showModal = ref(false);

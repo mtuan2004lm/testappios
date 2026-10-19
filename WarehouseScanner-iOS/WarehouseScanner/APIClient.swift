@@ -103,8 +103,9 @@ struct APIClient {
 
     /// Gửi MỘT lần cả mã vạch lẫn mã kho đọc được từ nhãn. Server tự khớp quy tắc để ra nhóm khách hàng/kho.
     /// Quét tuần tự từng tracking trên tem (hoặc QR "END CODE"); server trả SUCCESS / TRACK / NO_NAME.
-    func scan(sessionId: Int, barcode: String, detectedText: String) async throws -> ScanData {
-        let body: [String: Any] = ["barcode": barcode, "detected_text": detectedText]
+    func scan(sessionId: Int, barcode: String, detectedText: String, others: [String] = []) async throws -> ScanData {
+        var body: [String: Any] = ["barcode": barcode, "detected_text": detectedText]
+        if !others.isEmpty { body["other_barcodes"] = others }   // các mã khác cùng tem: server chọn mã có trong danh sách
         let r: ObjectResponse<ScanData> = try await perform("POST", "/api/v1/receiving/sessions/\(sessionId)/scan",
                                                             json: body, timeout: 3)
         return r.data

@@ -59,3 +59,4 @@ Mỗi lần quét, app lưu khung hình camera (`CameraEngine.snapshot()`) và g
 ### Hàng đợi ảnh label (`PhotoOutbox.swift`)
 
 Ảnh chụp ngay khi thấy mã vạch (`shotByCode`), lưu ở `Documents/PhotoOutbox/<itemId>__<uuid>.jpg` và chỉ xóa khi server xác nhận. Tự thử lại mỗi 5 giây; gửi bù khi vào màn quét hoặc mở danh sách phiên. Màn quét hiện "N ảnh label đang chờ gửi".
+- **19/10/2026**: ô "Mã kho" trên thẻ SUCCESS chỉ hiện mã kho khớp quy tắc (không bao giờ hiện tracking); quy tắc mã kho không nhận tiền tố "SHIP TO/DELIVERY TO". Cần build lại app. Chi tiết trong `warehouse-receiving/CHANGELOG.md`.

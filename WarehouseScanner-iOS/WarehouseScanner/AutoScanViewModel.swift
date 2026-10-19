@@ -231,6 +231,12 @@ final class AutoScanViewModel: ObservableObject {
 
     private func tryComplete() {
         guard let p = pending, let code = p.barcode, let w = p.warehouse else { return }
+        // Chờ thêm một chút để các mã khác trên cùng tem kịp vào khung (gửi cả nhóm một lần, tối đa 3 mã)
+        let wait = min(0.7, window * 0.7) - Date().timeIntervalSince(p.start)
+        if p.extras.count < 2 && wait > 0 {
+            Task { [weak self] in try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000)); self?.tryComplete() }
+            return
+        }
         clearPending()
         submit(code: code, text: w.text, group: w.group, extras: p.extras)
     }
@@ -279,7 +285,7 @@ final class AutoScanViewModel: ObservableObject {
         var keepShot = false                  // mất mạng: giữ ảnh để lần gửi lại vẫn dùng đúng ảnh này
         defer { if !keepShot { shotByCode[code] = nil } }
         do {
-            let data = try await api.scan(sessionId: session.id, barcode: code, detectedText: text)
+            let data = try await api.scan(sessionId: session.id, barcode: code, detectedText: text, others: extras)   // gửi cả các mã cùng tem một lần
             if skippedAt[code] != nil { skippedAt[code] = nil; skipped = max(skipped - 1, 0) }
             let status = data.status ?? "SUCCESS"
             if status == "TRACK" {
@@ -310,8 +316,9 @@ final class AutoScanViewModel: ObservableObject {
             lastItem = item
             let g = item.customerGroup ?? group
             let shown = item.barcode
-            entries.insert(ScanEntry(barcode: shown, warehouseText: text, group: g, status: noName ? .noName : .sent, note: noName ? "NO NAME" : nil), at: 0)
-            last = LastResult(barcode: shown, group: g, warehouseText: item.detectedWarehouseCode ?? (text.isEmpty ? nil : text), message: nil, businessType: item.businessType, unknown: item.exceptionStatus == "UNKNOWN", noName: noName)
+            let wh = item.detectedWarehouseCode ?? (group.isEmpty || text == code || text == shown ? nil : text)   // ô Mã kho chỉ nhận mã kho thật (khớp quy tắc), không bao giờ là tracking
+            entries.insert(ScanEntry(barcode: shown, warehouseText: wh, group: g, status: noName ? .noName : .sent, note: noName ? "NO NAME" : nil), at: 0)
+            last = LastResult(barcode: shown, group: g, warehouseText: wh, message: nil, businessType: item.businessType, unknown: item.exceptionStatus == "UNKNOWN", noName: noName)
             if noName { Haptics.warning(); AudioServicesPlaySystemSound(1103) }
             else { Haptics.success(); AudioServicesPlaySystemSound(1057) }   // "yes"
         } catch let e as APIError {
@@ -341,6 +348,15 @@ final class AutoScanViewModel: ObservableObject {
             } else if e.isNetwork {
                 keepShot = true
                 enqueue(code: code, text: text, group: group)
+            } else if e.code == "TRACKING_NOT_FOUND" {
+                // Rule ẩn "chỉ nhận mã có trong danh sách" (server bỏ comment RULE AN): báo FAIL
+                done.remove(code)
+                failCooldown[code] = Date()
+                failed += 1
+                entries.insert(ScanEntry(barcode: code, warehouseText: text, status: .rejected, note: e.message), at: 0)
+                last = LastResult(barcode: code, group: nil, warehouseText: text, message: e.message, failed: true)
+                Haptics.warning()
+                AudioServicesPlaySystemSound(1053)
             } else {
                 done.remove(code)
                 skipped += 1

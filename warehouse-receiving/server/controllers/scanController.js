@@ -25,6 +25,9 @@ exports.scan = asyncHandler(async (req, res) => {
   // detected_text la chuoi ma kho doc tu nhan; neu app khong gui thi dung chinh barcode de khop
   const detectedText = stripCtl(req.body && req.body.detected_text) || barcode;     // phải lọc giống barcode, nếu không tracking bị lưu nhầm thành "mã kho"
   const scannedBy = (req.body && req.body.scanned_by) || null;
+  // Cac ma khac thay CUNG MOT LUC tren tem (toi da 2 ma nua): server so khop tung ma voi Danh sach mat hang, lay ma co trong danh sach
+  const otherCodes = [...new Set((Array.isArray(req.body && req.body.other_barcodes) ? req.body.other_barcodes : []).map(stripCtl))]
+    .filter((c) => c && c !== barcode && c.length <= 100 && !/[^\x20-\x7E]/.test(c) && !isEndCode(c)).slice(0, MAX_TRACKS - 1);
 
   if (!barcode) throw new HttpError(400, 'barcode là bắt buộc', 'BARCODE_REQUIRED');
   if (barcode.length > 100) throw new HttpError(400, 'barcode tối đa 100 ký tự', 'BARCODE_TOO_LONG');
@@ -131,23 +134,59 @@ exports.scan = asyncHandler(async (req, res) => {
       throw new HttpError(409, `Mã ${barcode} vừa quét ở tem này`, 'DUPLICATE_BARCODE');
     }
 
-    const m = await matchProduct(client, barcode, s.rows[0].carrier_name);
+    let m = await matchProduct(client, barcode, s.rows[0].carrier_name);
+    let root = barcode;                     // ma goc cua kien (ma co trong danh sach neu co)
+    if (!m.product) {
+      for (const o of otherCodes) {         // tem co nhieu ma: thu lan luot cac ma con lai
+        const mo = await matchProduct(client, o, s.rows[0].carrier_name);
+        if (mo.product) { m = mo; root = o; break; }
+      }
+    }
     const candidates = m.candidates.map((c) => c.value);
+    const labelCodes = [barcode, ...otherCodes];      // tat ca ma thay tren tem nay (khong gom cac ma dang cho tu truoc)
 
     if (m.product) {
       // Cung mot kien co the co nhieu ma (toi da 3 ma tren tem) -> chan trung theo mat hang da khop
       const sameParcel = BLOCK_DUPLICATES && (await client.query(
-        'SELECT 1 FROM scanned_items WHERE session_id = $1 AND (product_id = $3 OR matched_tracking = $2) LIMIT 1', [sessionId, m.matched || barcode, m.product.id])).rows.length > 0;
-      if (sameParcel) return dupResponse(barcode);
-      const made = await makeItem({ rootCode: barcode, product: m.product, carrier: m.carrier, matched: m.matched || barcode, text: detectedText });
-      if (!made.item) return dupResponse(barcode);
-      // Luu tracking co thong tin thanh ma thu (pending.length + 1) cua tem
-      await client.query(
-        'INSERT INTO label_scans (session_id, seq, barcode, product_id, carrier, detected_text) VALUES ($1,$2,$3,$4,$5,$6)',
-        [sessionId, pending.length + 1, barcode, m.product.id, m.carrier, detectedText]);
-      return successResponse(made, { carrier: m.carrier, method: m.method, status: 'SUCCESS',
-        tracks: [...pending.map((p) => ({ seq: p.seq, barcode: p.barcode, matched: false })), { seq: pending.length + 1, barcode, matched: true }] });
+        'SELECT 1 FROM scanned_items WHERE session_id = $1 AND (product_id = $3 OR matched_tracking = $2) LIMIT 1', [sessionId, m.matched || root, m.product.id])).rows.length > 0;
+      if (sameParcel) return dupResponse(root);
+      const made = await makeItem({ rootCode: root, product: m.product, carrier: m.carrier, matched: m.matched || root, text: detectedText });
+      if (!made.item) return dupResponse(root);
+      // Luu cac ma cua tem nay (ma co trong danh sach co product_id)
+      let n = pending.length;
+      for (const c of labelCodes) {
+        n += 1;
+        await client.query(
+          'INSERT INTO label_scans (session_id, seq, barcode, product_id, carrier, detected_text) VALUES ($1,$2,$3,$4,$5,$6)',
+          [sessionId, n, c, c === root ? m.product.id : null, m.carrier, detectedText]);
+      }
+      return successResponse(made, { carrier: m.carrier, method: m.method, status: 'SUCCESS', product: m.product,
+        tracks: [...pending.map((p) => ({ seq: p.seq, barcode: p.barcode, matched: false })), ...labelCodes.map((c, i) => ({ seq: pending.length + i + 1, barcode: c, matched: c === root }))] });
     }
+
+    // Tem co nhieu ma (>=2) nhung khong ma nao co trong danh sach -> NO NAME ngay (luu tat ca ma), khong can quet END CODE
+    if (otherCodes.length) {
+      let n = pending.length;
+      for (const c of labelCodes) {
+        n += 1;
+        await client.query('INSERT INTO label_scans (session_id, seq, barcode, carrier, detected_text) VALUES ($1,$2,$3,$4,$5)', [sessionId, n, c, m.carrier, detectedText]);
+      }
+      const rootCode = pending.length ? pending[0].barcode : barcode;
+      const made = await makeItem({ rootCode, product: null, carrier: m.carrier, matched: rootCode, text: detectedText, noName: true });
+      return successResponse(made, { carrier: m.carrier, method: null, status: 'NO_NAME', noName: true,
+        tracks: [...pending.map((p) => ({ seq: p.seq, barcode: p.barcode })), ...labelCodes.map((c, i) => ({ seq: pending.length + i + 1, barcode: c }))] });
+    }
+
+    // 🧪 RULE AN (dang COMMENT): chi nhan ma co trong Danh sach mat hang, ma la = FAIL (422 TRACKING_NOT_FOUND).
+    // Muon bat: bo comment khoi nay (xoa "// " dau moi dong). Khoi nay chay TRUOC buoc TING/NO NAME ben duoi,
+    // nen khong can xoa rule hien tai. Sau do khoi dong lai server.
+    // await client.query(
+    //   `UPDATE receiving_sessions
+    //       SET fail_count = fail_count + 1, last_scan_status = 'FAIL', last_scan_at = CURRENT_TIMESTAMP, last_scan_barcode = $2,
+    //           last_scan_text = $3, last_scan_group = NULL, last_scan_exception = NULL
+    //     WHERE id = $1`, [sessionId, barcode, hasExplicitText ? detectedText : null]);
+    // await client.query('COMMIT');
+    // throw new HttpError(422, 'Mã không có trong danh sách mặt hàng', 'TRACKING_NOT_FOUND', { tried: candidates });
 
     // Khong co thong tin -> ghi lai tracking (TING), cho ma tiep theo
     const seq = pending.length + 1;

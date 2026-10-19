@@ -121,6 +121,15 @@ Nếu không có `.env`, server dùng mặc định của `pg` (user máy, datab
 | `holds` | **Hàng đang giữ** (tracking, mã vụ, loại WAREHOUSE/CUSTOMER, lý do, trạng thái ACTIVE/RESOLVED, vị trí) |
 | `products` | **Danh sách mặt hàng** (tên, ảnh, SL, trạng thái dịch lọc, tracking, mã khác, mã đơn hàng, đối tác) |
 
+## Quy tắc kết quả quét & rule ẩn "chỉ nhận mã có trong danh sách"
+
+Mỗi mã tracking quét xong có một trong ba kết quả:
+- **SUCCESS**: đọc được và có trong Danh sách mặt hàng.
+- **NO NAME (không xác định)**: đọc được nhưng không có trong danh sách. Vẫn được ghi nhận thành kiện không xác định, nên có thể quét đơn bất kỳ để test.
+- **FAIL**: chỉ khi không đọc được (label bị che, mờ, rách).
+
+Trước đây hệ thống chỉ nhận mã có trong danh sách (mã lạ = FAIL). Quy tắc đó vẫn còn trong code nhưng đang **comment** (mặc định tắt, không có nút trên giao diện). Vị trí: `server/controllers/scanController.js`, tìm `RULE AN`. Muốn bật: bỏ `// ` đầu mỗi dòng của khối đó rồi khởi động lại server; khối này chạy trước bước NO NAME nên không cần xoá rule hiện tại. Khi bật, mã lạ bị từ chối `422 TRACKING_NOT_FOUND` và tính FAIL; app iPhone (bản đã build lại) hiện FAIL đỏ. Muốn tắt lại: comment khối đó.
+
 ## API (tất cả endpoint đang dùng)
 
 Địa chỉ gốc: `http://localhost:3000`. Mọi endpoint nghiệp vụ nằm dưới `/api/v1`. Web gọi qua proxy Vite (`/api` → `:3000`); app iPhone gọi thẳng địa chỉ server. Body là JSON (`Content-Type: application/json`) trừ các endpoint tải ảnh.
@@ -266,3 +275,7 @@ Xem `../WarehouseScanner-iOS/README.md`. Tóm tắt: iPhone làm máy quét; phi
 - **Quy tắc mã kho FADO.VN nhận "FD VAT HUE"** (14/10/2026): quy tắc cũ viết dính (FDVAT HUE) nên không khớp nhãn thật. Chạy `npm run db:fix-rules` (chỉ sửa khi còn là bản mặc định, chạy lại an toàn), rồi mở lại app iPhone để tải quy tắc mới.
 - **Sửa lỗi tracking bị lưu thành Mã kho** (12/10/2026): mã vạch USPS có ký tự ẩn (GS); server nay lọc ký tự này cho cả barcode lẫn mã kho, và không coi chuỗi trùng tracking (kể cả Tracking / Mã khác của mặt hàng) là mã kho. File sửa: `server/controllers/scanController.js`, `server/scripts/recompute-items.js`. Dọn dữ liệu cũ: `npm run db:recompute -- --clear-only` (chỉ xóa mã kho là tracking, không đụng nhóm KH / loại hình). Cần khởi động lại server. Kiện quét bằng web vẫn không có Nhóm KH / Mã kho vì web không đọc được chữ trên tem (chỉ app iPhone dùng OCR).
 - **Thêm mục "Công nghệ sử dụng"** (13/10/2026) vào README: liệt kê công nghệ của database, server, web, app iPhone và công cụ. Chỉ sửa tài liệu.
+- **Rule ẩn "chỉ nhận mã có trong danh sách"** (19/10/2026): nằm dạng comment trong `server/controllers/scanController.js` (tìm `RULE AN`). Bỏ comment + khởi động lại server = mã lạ là FAIL; để comment = mã lạ là NO NAME. Cần build lại app 📱 để thấy FAIL đỏ.
+- **Ô "Mã kho" trên app không hiện tracking** (19/10/2026): chỉ hiện mã kho khớp quy tắc; quy tắc mã kho không nhận tiền tố "SHIP TO/DELIVERY TO". Cần build lại app 📱.
+- **Danh sách phiên trên web tự cập nhật mỗi 1,5 giây** (19/10/2026): kết thúc/tạo phiên từ iPhone hiện ngay, không cần reload.
+- **Quét cả nhóm mã trên tem một lần** (19/10/2026): app gom tối đa 3 mã cùng khung hình rồi gửi một lần (`other_barcodes`); server chọn mã có trong danh sách = SUCCESS, không có mã nào = NO NAME ngay. Gửi 1 mã lạ vẫn "ting" + END CODE như cũ. Rule "chỉ nhận mã trong danh sách" vẫn tắt (mã nào cũng quét được). Cần build lại app 📱.

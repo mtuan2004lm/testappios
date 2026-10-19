@@ -57,6 +57,8 @@
 
 ### 🧪 Cờ test
 - `BLOCK_DUPLICATES` (biến môi trường, mặc định **tắt**): tắt = quét lại cùng mã vẫn được ghi nhận (để test với ít mã). Bật `BLOCK_DUPLICATES=true` = chặn trùng trong cùng phiên. Quét cùng mã ở phiên khác luôn được.
+- Rule "chỉ nhận mã có trong danh sách" nằm **dạng comment** trong `scanController.js` (tìm `RULE AN`, mặc định tắt, không có nút). Bỏ comment khối đó = mã lạ bị từ chối `422 TRACKING_NOT_FOUND` và tính **FAIL**; để comment = mã lạ → TING / **NO NAME**.
+- Nguyên tắc 3 trạng thái (mặc định): **FAIL** = không đọc được (label bị che/mờ); **NO NAME** = đọc được nhưng không có trong danh sách; **SUCCESS** = có trong danh sách.
 - Ràng buộc unique `unique_barcode_per_session` đã bị bỏ khỏi schema.
 
 ### 🔥 Đồng bộ trạng thái app → web
@@ -85,6 +87,30 @@
 ---
 
 ## 4. Lịch sử thay đổi (mới nhất ở trên)
+
+### 2026-10-19 · ⭐🔥📱 Quét cả nhóm mã trên một tem một lần (tối đa 3), server chọn mã có trong danh sách
+- Cách cũ: mỗi lần gọi scan = 1 mã, chưa có thông tin thì "ting", đủ 3 mã phải quét END CODE. Cách mới: app gom các mã thấy **cùng lúc trong khung** (chờ tối đa ~0,7 giây) rồi gửi **một lần**; server thử từng mã với Danh sách mặt hàng.
+- `scanController.js`: nhận thêm `other_barcodes` (mảng, tối đa 2 mã nữa, bỏ trùng/ký tự lạ/END CODE). Có mã trong danh sách → **SUCCESS** (mã đó là mã gốc, các mã còn lại lưu vào "Tracking trên tem"). Không mã nào có trong danh sách → **NO NAME ngay**, lưu tất cả mã, không cần quét END CODE.
+- Giữ nguyên làm dự phòng: gửi **1 mã** mà không có trong danh sách vẫn "ting" (TRACK), đủ 3 mã vẫn bắt quét END CODE như cũ. Rule "chỉ nhận mã có trong danh sách" (`RULE AN`) vẫn đang comment = **mã nào cũng quét được** để test thực tế.
+- `APIClient.swift`: `scan(..., others:)` gửi `other_barcodes`. `AutoScanViewModel.swift`: gửi cả nhóm mã một lần và chờ ngắn trong `tryComplete()` để các mã cùng tem kịp vào khung. 📱 cần build lại app.
+- 🧪 Đã test sandbox (6 trường hợp): mã chính lạ + mã phụ có trong DS → SUCCESS; mã chính có trong DS → SUCCESS; 3 mã lạ → NO NAME; 1 mã lạ → TING; có 1 mã chờ + 2 mã lạ → NO NAME gồm cả 3; mã phụ trùng mã chính → coi như 1 mã (TING). Chưa chép về máy.
+
+### 2026-10-19 · ⭐ Web: danh sách phiên tự cập nhật (kết thúc/tạo phiên từ iPhone hiện ngay)
+- Lỗi: bấm **Kết thúc phiên** trên điện thoại nhưng web phải reload mới thấy. Nguyên nhân: trang **Danh sách phiên** (`SessionList.vue`) chỉ tải 1 lần khi mở, không có cập nhật tự động (trang quét `SessionScan.vue` thì đã tự cập nhật mỗi 1 giây).
+- `SessionList.vue`: tự tải lại mỗi 1,5 giây (chạy ngầm, không nháy màn hình, giữ nguyên trang đang xem); dừng khi rời trang.
+- Chép web: cần build lại giao diện (`npm run build` trong `client`) hoặc đang chạy `npm run dev` thì tự nhận. Không cần build app iPhone.
+
+### 2026-10-19 · ⭐🔥📱 App iPhone: ô "Mã kho" không bao giờ hiện mã tracking
+- Lỗi: thẻ SUCCESS hiện tracking ở ô **MÃ KHO** (app lấy chữ `text` gửi lên để hiện khi server không trả mã kho). Server vẫn trả `detected_warehouse_code = null` đúng.
+- `AutoScanViewModel.swift` (sau khi gửi thành công): ô Mã kho = mã kho server trả về, hoặc chữ app đã khớp **quy tắc** (có Nhóm KH) và không trùng tracking; còn lại để "—". Tracking luôn chỉ nằm ở dòng mã tracking.
+- Quyết định: **quy tắc mã kho KHÔNG nhận tiền tố "SHIP TO / DELIVERY TO"** (quy tắc vẫn neo đầu dòng `^`). Mã kho phải đứng đầu dòng OCR; chữ mờ/không đọc được thì ô Mã kho để "—".
+- 🧪 Chưa chép về máy; cần build lại app 📱.
+
+### 2026-10-19 · ⭐🧪📱 Thêm lại quy tắc "chỉ nhận mã có trong danh sách" dạng comment (ẩn)
+- `scanController.js`: khối từ chối `422 TRACKING_NOT_FOUND` (tăng `fail_count`) đặt **trong comment** (`RULE AN`), ngay trước bước ghi TING. Không cần xoá rule hiện tại vì khối này chạy trước.
+- `AutoScanViewModel.swift`: nhận `TRACKING_NOT_FOUND` thì báo FAIL đỏ (nhớ 8 giây). 📱 cần build lại app để thấy.
+- Bật: bỏ comment khối đó rồi khởi động lại server. Không thêm nút nào vào giao diện.
+- 🧪 Đã test sandbox (bản tạm đã bỏ comment): mã có trong danh sách → SUCCESS; mã lạ → 422 + `fail_count` tăng. Để comment: mã lạ vẫn NO NAME.
 
 ### 2026-10-19 · ⭐📱 App iPhone: chi tiết phiên (cập nhật 1 giây) + đổi ngôn ngữ Việt/Anh
 - **Màn chi tiết phiên** `SessionDetailView.swift` (mới): hiện ĐÃ QUÉT / DỰ KIẾN, danh sách đơn đã quét (mã, nhóm KH, mã kho, nhãn SUCCESS / NO NAME / HỎNG / GIỮ / BLOCK / KHÔNG XÁC ĐỊNH) và nút **Bắt đầu quét** / **Tiếp tục quét** nằm riêng ở đáy. Tự hỏi server mỗi **1 giây** (GET `/receiving/sessions/:id`, cùng lệnh web dùng) nên đơn xoá/thêm/đổi trạng thái trên web hoặc máy khác hiện ngay; mất mạng thì giữ danh sách và thử lại. Nút "Kết thúc phiên" ở góc trên.
