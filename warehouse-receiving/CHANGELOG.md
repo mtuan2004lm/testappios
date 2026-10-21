@@ -88,6 +88,13 @@
 
 ## 4. Lịch sử thay đổi (mới nhất ở trên)
 
+### 2026-10-19 · ⭐🔥📱 OCR mã kho: đọc được chữ nhỏ trên tem
+- Lỗi: tem in rõ nhưng app lúc bắt lúc không bắt mã kho (vd. "FD VAT HUE" nằm trong khối SHIP TO). Nguyên nhân: (1) Vision mặc định **bỏ qua chữ thấp hơn ~3% chiều cao ảnh**, mà mã kho trên tem chỉ ~1,5–2%; (2) chỉ 1/8 khung hình đọc kỹ (`.accurate`), còn lại `.fast` thường sót chữ nhỏ; (3) cửa sổ đọc chỉ 1 giây.
+- `CameraEngine.swift`: thêm `request.minimumTextHeight = 0.012`; đọc kỹ xen kẽ mỗi 2 khung (trước là mỗi 8 khung).
+- `AutoScanViewModel.swift`: cửa sổ đọc một tem `window` 1,0 → 1,4 giây (đọc kỹ chậm hơn nên cần dư thời gian).
+- Không đổi quy tắc mã kho (vẫn neo đầu dòng, không nhận "SHIP TO/DELIVERY TO"). Không giả định vị trí cố định của mã kho trên tem.
+- 🧪 Chưa test trên máy thật (sandbox không chạy được camera/Vision); cần build lại app 📱 và thử các tem. Nếu vẫn sót thì thử đưa tem lại gần hơn hoặc xem hướng đọc theo vùng.
+
 ### 2026-10-19 · ⭐🔥📱 Quét cả nhóm mã trên một tem một lần (tối đa 3), server chọn mã có trong danh sách
 - Cách cũ: mỗi lần gọi scan = 1 mã, chưa có thông tin thì "ting", đủ 3 mã phải quét END CODE. Cách mới: app gom các mã thấy **cùng lúc trong khung** (chờ tối đa ~0,7 giây) rồi gửi **một lần**; server thử từng mã với Danh sách mặt hàng.
 - `scanController.js`: nhận thêm `other_barcodes` (mảng, tối đa 2 mã nữa, bỏ trùng/ký tự lạ/END CODE). Có mã trong danh sách → **SUCCESS** (mã đó là mã gốc, các mã còn lại lưu vào "Tracking trên tem"). Không mã nào có trong danh sách → **NO NAME ngay**, lưu tất cả mã, không cần quét END CODE.

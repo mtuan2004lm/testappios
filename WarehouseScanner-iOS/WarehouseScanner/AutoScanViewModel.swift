@@ -63,7 +63,7 @@ final class AutoScanViewModel: ObservableObject {
     var matcher = RuleMatcher(rules: [])
 
     /// Thời gian tối đa gom đủ barcode + mã kho cho một nhãn (mục tiêu ~2 giây).
-    let window: TimeInterval = 1.0
+    let window: TimeInterval = 1.4
 
     private struct Pending {
         var barcode: String?
