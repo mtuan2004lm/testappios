@@ -5,7 +5,7 @@ import CoreImage
 
 /// Camera chạy liên tục. Cùng một luồng hình cho cả hai việc:
 ///  - Đọc barcode bằng AVCaptureMetadataOutput (nhanh, chạy trên chip chuyên dụng)
-///  - Đọc chữ (mã kho in trên nhãn) bằng Vision, chỉ khi bật `ocrEnabled`, đọc nhanh (.fast) tối đa tốc độ máy cho phép, cứ 2 lần thì có 1 lần đọc kỹ (.accurate), đọc được chữ nhỏ tới 1,2% chiều cao ảnh (minimumTextHeight).
+///  - Đọc chữ (mã kho in trên nhãn) bằng Vision, chỉ khi bật `ocrEnabled`, đọc nhanh (.fast) tối đa tốc độ máy cho phép, cứ 8 lần thì có 1 lần đọc kỹ (.accurate) để không bỏ sót chữ nhỏ.
 final class CameraEngine: NSObject, ObservableObject,
                           AVCaptureMetadataOutputObjectsDelegate, AVCaptureVideoDataOutputSampleBufferDelegate {
 
@@ -189,7 +189,7 @@ final class CameraEngine: NSObject, ObservableObject,
         // Không còn khoảng nghỉ giữa hai lần OCR: xong khung này là đọc ngay khung kế tiếp (nhanh ~2x)
         let allowed = _ocrEnabled && !_ocrBusy
         var accurate = false
-        if allowed { _ocrBusy = true; _lastOCR = Date(); _ocrCount += 1; accurate = _ocrCount % 2 == 0 }
+        if allowed { _ocrBusy = true; _lastOCR = Date(); _ocrCount += 1; accurate = _ocrCount % 8 == 0 }
         lock.unlock()
         refocusIfStuck()
         guard allowed, let buffer = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
@@ -204,10 +204,9 @@ final class CameraEngine: NSObject, ObservableObject,
                 DispatchQueue.main.async { self?.onTextLines?(lines) }
             }
         }
-        // Khung hình xen kẽ: đọc nhanh (.fast) để ra kết quả sớm, đọc kỹ (.accurate) mỗi khung thứ 2 cho chữ nhỏ/mờ
+        // Phần lớn khung hình đọc nhanh (.fast, ~vài chục ms) để ra kết quả sớm; 1/8 khung đọc kỹ cho chữ nhỏ/mờ
         request.recognitionLevel = accurate ? .accurate : .fast
         request.usesLanguageCorrection = false     // mã không phải từ điển, tránh bị "sửa" sai
-        request.minimumTextHeight = 0.012          // mặc định Vision bỏ qua chữ thấp hơn ~3% chiều cao ảnh; mã kho trên tem nhỏ chỉ ~1,5-2%
 
         // Camera sau ở chế độ dọc: ảnh gốc xoay 90° -> .right
         let handler = VNImageRequestHandler(cvPixelBuffer: buffer, orientation: .right, options: [:])

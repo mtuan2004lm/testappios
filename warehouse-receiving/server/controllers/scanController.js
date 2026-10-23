@@ -4,7 +4,7 @@ const { matchRule } = require('../utils/ruleMatcher');
 const { matchProduct } = require('../utils/trackingFormats');
 
 // Ma QR "END CODE" (1 ma co dinh dung chung, in san): ket thuc mot tem khi ca 3 tracking deu khong co thong tin
-const isEndCode = (code) => /^END[\s_-]?CODE$/i.test(String(code || '').trim());
+const isEndCode = (code) => /^\*?ENDCODE\*?$/i.test(String(code || '').trim());   // chỉ nhận ENDCODE (tem Code 39 *ENDCODE*; chấp nhận thêm dấu * đầu/cuối nếu đầu đọc trả kèm ký tự start/stop); không còn nhận 'END CODE' / 'END-CODE' / 'END_CODE'
 // CHE DO THU: false = cho phep quet lai cung mot ma nhieu lan (de test voi vai ma mau). Chi chan trung khi dat BLOCK_DUPLICATES=true.
 // (Giua cac phien khac nhau thi luon quet lai duoc: chi chan trung trong CUNG MOT phien.)
 const BLOCK_DUPLICATES = process.env.BLOCK_DUPLICATES === 'true';
@@ -55,7 +55,9 @@ exports.scan = asyncHandler(async (req, res) => {
     const makeItem = async ({ rootCode, product, carrier, matched, text, noName }) => {
       // "Mã kho" chỉ là chữ đọc từ nhãn. Nếu chuỗi gửi lên thực chất là mã tracking (của chính kiện này hoặc mã khác của mặt hàng) thì KHÔNG phải mã kho
       const codes = [rootCode, matched, product && product.tracking_code, product && product.alt_code, product && product.alt_code2].filter(Boolean).map(squash);
-      const explicit = !!text && !codes.includes(squash(text));
+      // Chuỗi trùng với BẤT KỲ mã vạch nào thấy trên tem này (kể cả mã phụ / mã của nhãn khác lọt vào khung hình) cũng không phải mã kho
+      const seenCodes = [barcode, ...otherCodes, ...pending.map((p) => p.barcode)].map(squash);
+      const explicit = !!text && !codes.includes(squash(text)) && !seenCodes.includes(squash(text));
       const mt = explicit ? text : ((reg && reg.warehouse_code) || text || rootCode);
       const rule = textForRule(mt);
       const ins = await client.query(

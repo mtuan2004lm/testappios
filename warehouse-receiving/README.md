@@ -279,4 +279,5 @@ Xem `../WarehouseScanner-iOS/README.md`. Tóm tắt: iPhone làm máy quét; phi
 - **Ô "Mã kho" trên app không hiện tracking** (19/10/2026): chỉ hiện mã kho khớp quy tắc; quy tắc mã kho không nhận tiền tố "SHIP TO/DELIVERY TO". Cần build lại app 📱.
 - **Danh sách phiên trên web tự cập nhật mỗi 1,5 giây** (19/10/2026): kết thúc/tạo phiên từ iPhone hiện ngay, không cần reload.
 - **Quét cả nhóm mã trên tem một lần** (19/10/2026): app gom tối đa 3 mã cùng khung hình rồi gửi một lần (`other_barcodes`); server chọn mã có trong danh sách = SUCCESS, không có mã nào = NO NAME ngay. Gửi 1 mã lạ vẫn "ting" + END CODE như cũ. Rule "chỉ nhận mã trong danh sách" vẫn tắt (mã nào cũng quét được). Cần build lại app 📱.
+- **END CODE chỉ nhận `ENDCODE`** (21/10/2026): dùng tem Code 39 `*ENDCODE*`; mã `END CODE` / `END-CODE` / `END_CODE` cũ (kể cả QR cũ của web) không còn tác dụng.
 - **OCR mã kho đọc được chữ nhỏ hơn** (19/10/2026): `minimumTextHeight` 1,2%, đọc kỹ mỗi 2 khung, cửa sổ đọc 1,4 giây. Cần build lại app 📱 và thử lại.

@@ -27,7 +27,7 @@
 | Web mặt hàng | `client/src/views/ItemsList.vue` | Quản lý Danh sách mặt hàng |
 | Web hàng giữ | `client/src/views/HoldsList.vue` | Hàng đang giữ + Block |
 | API client | `client/src/api.js` | Hàm gọi server |
-| QR END CODE | `client/public/end-code-qr.png` | Mã QR cố định nội dung `END CODE` |
+| ~~QR END CODE~~ | `client/public/end-code-qr.png` | ⚠️ Không còn dùng (đã bỏ khỏi web 21/10/2026); dùng tem Code 39 `*ENDCODE*` |
 | App iPhone | `WarehouseScanner-iOS/WarehouseScanner/` | `AutoScanViewModel.swift` (logic quét), `AutoScanView.swift` (giao diện), `APIClient.swift`, `Models.swift`, `AppStore.swift` |
 | Sơ đồ DB | `Database_He_thong_nhan_hang.drawio` | ERD mở bằng draw.io |
 
@@ -87,6 +87,36 @@
 ---
 
 ## 4. Lịch sử thay đổi (mới nhất ở trên)
+
+### 2026-10-21 · ⭐📱 END CODE: chấp nhận thêm dấu `*` đầu/cuối (`*ENDCODE*`)
+- Tem Code 39 `*ENDCODE*` bị coi là tracking thường. Nguyên nhân khả dĩ: (1) app trên iPhone **chưa build lại** nên vẫn gửi `END CODE` (có dấu cách) mà server nay chỉ nhận `ENDCODE`; (2) đầu đọc trả kèm dấu `*` start/stop. Chưa xác nhận cái nào vì chưa thấy chuỗi camera đọc ra.
+- Server `isEndCode = /^\*?ENDCODE\*?$/i`; app `isEndCode` cắt dấu `*` hai đầu trước khi so. Vẫn không nhận `END CODE` / `END-CODE` / `END_CODE`. Cần khởi động lại server và build lại app 📱.
+
+### 2026-10-21 · ⭐ Web: bỏ ảnh QR END CODE khỏi pop-up "Bắt buộc quét END CODE"
+- `client/src/views/SessionScan.vue`: xoá thẻ `<img src="/end-code-qr.png">`; pop-up vẫn còn chữ hướng dẫn và nút "Nhập END CODE (thao tác tay)" (gửi `ENDCODE`). File ảnh `client/public/end-code-qr.png` **vẫn còn trên đĩa** (chưa xoá, không còn được dùng; có thể tự xoá). Cần build lại web.
+
+### 2026-10-21 · ⭐📱 END CODE chỉ nhận đúng chuỗi `ENDCODE` (tem Code 39 `*ENDCODE*`)
+- Theo yêu cầu: không dùng mã QR "END CODE" cũ của web nữa mà dùng tem Code 39 `*ENDCODE*` (camera đọc ra `ENDCODE`). Trước đây chấp nhận cả `END CODE`, `END-CODE`, `END_CODE`; nay chỉ nhận `ENDCODE` (không phân biệt hoa/thường).
+- `server/controllers/scanController.js`: `isEndCode = /^ENDCODE$/i`. `AutoScanViewModel.swift`: `isEndCode` so đúng `ENDCODE`; app gửi lên server `ENDCODE` (trước là `END CODE`). `client/src/views/SessionScan.vue`: nút "Nhập END CODE (thao tác tay)" gửi `ENDCODE`.
+- ⚠️ Mã QR cũ (nội dung `END CODE`) **không còn tác dụng**. Chữ "QR END CODE" trong giao diện chưa đổi (chưa được duyệt). Ảnh QR đã **bỏ khỏi pop-up trên web** (xem mục dưới) — dán tem Code 39 cạnh bàn quét.
+- Cần khởi động lại server, build lại web, build lại app 📱. Chưa thử trên máy thật (chỉ kiểm tra cú pháp và regex).
+
+### 2026-10-21 · ⭐🔥 Server: mã vạch của nhãn khác không còn bị lưu thành "Mã kho"
+- Lỗi: nhãn bên cạnh lọt vào khung hình (vd mã 2D `SPvW01s62p_001_v`) hiện ở cột Mã kho trên web. Nguyên nhân: `makeItem` coi mọi chuỗi không trùng mã của kiện là "mã kho do app gửi"; khi app không gửi chữ OCR thì `detectedText` rơi về chính mã vạch chính, và mã chính đó (của nhãn khác) bị lưu thành mã kho.
+- Sửa `server/controllers/scanController.js` (`makeItem`): chuỗi trùng với bất kỳ mã vạch nào thấy trên tem (mã chính, `other_barcodes`, các tracking đang chờ) thì **không** phải mã kho. Mã kho chỉ lấy từ chữ OCR khớp quy tắc.
+- 🧪 Đã thử trong sandbox: mã lạ chính + mã nhãn khác → mã kho trống; có chữ `SG HUE DOFA` → vẫn ra mã kho + nhóm FADO.VN. Cần khởi động lại server.
+- Chưa sửa: vẫn có thể gom nhầm mã của nhãn khác vào cùng một kiện (đề xuất lọc mã 2D ở app, chờ duyệt). Không tạo file sao lưu `_old`; hoàn tác bằng `git checkout -- warehouse-receiving/server/controllers/scanController.js`.
+
+### 2026-10-21 · 📱 Khôi phục OCR về như trước (bỏ đọc chữ nhỏ)
+- Theo yêu cầu, hoàn tác mục "OCR mã kho: đọc được chữ nhỏ trên tem" (2026-10-19): `CameraEngine.swift` bỏ `request.minimumTextHeight = 0.012` và đọc kỹ (.accurate) lại **mỗi 8 khung** (không còn mỗi 2 khung); `AutoScanViewModel.swift` cửa sổ đọc một tem `window` 1,4 → **1,0 giây**.
+- Các thay đổi khác (quét nhóm mã, ô Mã kho, quy tắc ẩn…) giữ nguyên. Không tạo thêm file; hai file Swift ghi đè từ bản sao `_old/*.before-ocr` đã có sẵn.
+- Lý do: tem "SG HUE DOFA" vẫn không bắt được mã kho. Nghi do Vision gộp `SHIP SGHUE DOFA` thành một dòng hoặc đọc sai chữ, chưa xác nhận vì chưa thấy chữ OCR thô.
+- Cần build lại app 📱.
+
+### 2026-10-21 · 📱 Gỡ dòng đo độ nét camera (khôi phục như trước)
+- Ngày 2026-10-21 đã thêm thử một dòng chữ vàng đo độ nét trên màn hình quét (`CameraEngine.swift`, `AutoScanView.swift`); theo yêu cầu, đã **gỡ hoàn toàn** và khôi phục hai file Swift về đúng bản trước đó (bằng git). README iOS cũng khôi phục.
+- Hiện tại không còn đo độ nét; ý tưởng gợi ý lấy nét (lùi ra / tiến lại gần / bật đèn) **chưa làm**, nếu làm lại thì bắt đầu bằng bước đo số liệu rồi mới chọn ngưỡng.
+- Cần build lại app 📱 để bản trên máy không còn dòng chữ vàng.
 
 ### 2026-10-19 · ⭐🔥📱 OCR mã kho: đọc được chữ nhỏ trên tem
 - Lỗi: tem in rõ nhưng app lúc bắt lúc không bắt mã kho (vd. "FD VAT HUE" nằm trong khối SHIP TO). Nguyên nhân: (1) Vision mặc định **bỏ qua chữ thấp hơn ~3% chiều cao ảnh**, mà mã kho trên tem chỉ ~1,5–2%; (2) chỉ 1/8 khung hình đọc kỹ (`.accurate`), còn lại `.fast` thường sót chữ nhỏ; (3) cửa sổ đọc chỉ 1 giây.

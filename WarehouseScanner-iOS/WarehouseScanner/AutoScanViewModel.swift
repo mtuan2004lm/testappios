@@ -63,7 +63,7 @@ final class AutoScanViewModel: ObservableObject {
     var matcher = RuleMatcher(rules: [])
 
     /// Thời gian tối đa gom đủ barcode + mã kho cho một nhãn (mục tiêu ~2 giây).
-    let window: TimeInterval = 1.4
+    let window: TimeInterval = 1.0
 
     private struct Pending {
         var barcode: String?
@@ -98,8 +98,8 @@ final class AutoScanViewModel: ObservableObject {
 
     /// QR "END CODE" (mã cố định dùng chung): kết thúc tem khi cả 3 tracking đều không có thông tin.
     static func isEndCode(_ s: String) -> Bool {
-        let n = s.uppercased().filter { !" _-".contains($0) }
-        return n == "ENDCODE"
+        // Chỉ nhận đúng "ENDCODE" (tem Code 39 *ENDCODE*), không còn nhận "END CODE" / "END-CODE" / "END_CODE"
+        return s.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "*")).uppercased() == "ENDCODE"   // Code 39 có thể trả kèm dấu * start/stop
     }
 
     private func showHint(_ text: String) {
@@ -126,7 +126,7 @@ final class AutoScanViewModel: ObservableObject {
                 if let t = endCodeAt, now.timeIntervalSince(t) < 3 { continue }
                 endCodeAt = now
                 clearPending()
-                Task { await send(code: "END CODE", text: lastLabel?.text ?? "", group: "") }   // không cần đọc mã kho
+                Task { await send(code: "ENDCODE", text: lastLabel?.text ?? "", group: "") }   // không cần đọc mã kho
                 continue
             }
             let prevSeen = lastSeen[code]

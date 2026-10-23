@@ -497,9 +497,8 @@ onMounted(async () => {
         <AlertTriangle class="mx-auto h-10 w-10 text-amber-500" />
         <h2 class="text-xl font-extrabold text-navy">{{ tr('Bắt buộc quét QR END CODE') }}</h2>
         <p class="text-sm text-slate-600">{{ tr('Tem này đã quét đủ 3 tracking nhưng không có thông tin trong danh sách. Hãy quét mã QR END CODE trước khi quét tem khác.') }}</p>
-        <img src="/end-code-qr.png" alt="QR END CODE" class="mx-auto h-40 w-40 rounded-lg border border-slate-200" />
         <div class="font-mono text-xs text-slate-500">Tracking: {{ pendingTracks.map((t) => t.barcode).join(' · ') }}</div>
-        <button class="btn-accent w-full" @click="code = 'END CODE'; submitScan()">{{ tr('Nhập END CODE (thao tác tay)') }}</button>
+        <button class="btn-accent w-full" @click="code = 'ENDCODE'; submitScan()">{{ tr('Nhập END CODE (thao tác tay)') }}</button>
       </div>
     </div>
 
